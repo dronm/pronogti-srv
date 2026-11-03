@@ -1,0 +1,78 @@
+{
+	"http": {
+		"addr": "127.0.0.1:59000",
+		"read_timeout": "15s",
+		"write_timeout": "65s",
+		"idle_timeout": "60s",
+		"request_timeout": "60s"
+	},
+	"cors": {
+		"allowed_origins": [
+			"http://localhost:3000"
+		],
+		"allowed_methods": [
+			"GET",
+			"POST",
+			"OPTIONS",
+			"DELETE"
+		],
+		"allowed_headers": [
+			"Content-Type",
+			"Authorization",
+			"Accept",
+			"Origin",
+			"X-Requested-With",
+			"Query-Id",
+			"X-Customer-Session",
+			"X-Salon-Session",
+			"Idempotency-Key"
+		],
+		"exposed_headers": [
+			"Content-Length",
+			"Content-Type",
+			"Query-Id"
+		],
+		"allow_credentials": true,
+		"max_age_seconds": 86400
+	},
+	"debug": {
+		"log_config": false,
+		"log_level": "info",
+		"log_format": "text"
+	},
+	"yClients": {
+		"partnerToken": "YOUR_PARTNER_TOKEN",
+		"login": "YOUR_LOGIN",
+		"password": "YOUR_PASSWORD"
+	},
+	"cache": {
+		"ttl": "3h"
+	},
+	"client_timeout": "10s",
+	"shutdown_timeout": "10s",
+	"database": {
+		"primary_env": "PRONOGTI_DATABASE_URL",
+		"secondaries": {}
+	},
+	"session": {
+		"enabled": true,
+		"cookie_name": "_pronogti_s",
+		"kiosk_cookie_name": "_pronogti_kiosk",
+		"kiosk_cookie_max_age": 34560000,
+		"cookie_domain": "",
+		"secure": false,
+		"same_site": "lax",
+		"max_life_time": 2592000,
+		"max_idle_time": 604800,
+		"destroy_all_time": "",
+		"customer_max_life_time": 1800,
+		"customer_max_idle_time": 180,
+		"redis": {
+			"connect": "redis://127.0.0.1:6379/0",
+			"namespace": "pronogti"
+		}
+	},
+	"checkout": {
+		"max_life_time": 900
+	}
+}

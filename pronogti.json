@@ -1,0 +1,49 @@
+{
+  "baseURL": "http://localhost:5173",
+  "id": "",
+  "production": false,
+  "logLevel": "debug",
+  "logToFile": "",
+  "db": {
+    "primary": "postgresql://pronogti:pronogti@localhost:5432/pronogti",
+    "secondaries": {}
+  },
+  "wsServer": {
+    "start": true,
+    "cleanupInterval": 600000,
+    "address": ":1340"
+  },
+  "eventServer": {
+    "start": true,
+    "pauseInterval": 500
+  },
+  "appId": "",
+  "session": {
+    "maxLifeTime": 2592000,
+    "maxIdleTime": 0,
+    "encKey": "efaa6b3124de49ba9eb253f78c3b1033085768d8263f42dca6b498ec0df4bc39",
+    "destroy_all_time": ""
+  },
+  "reportErrors": true,
+  "httpServer": ":59000",
+  "middlewareTimeout": 60000,
+  "clientQueryTimeout": 60000,
+  "debugQueries": true,
+  "appShutdownTimeout": 10,
+  "defaultLocale": "",
+  "techMail": "",
+  "author": "",
+  "redis": {
+    "connect": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
+    "namespace": "pronogti"
+  },
+  "publicPictureDir": "",
+  "yClients": {
+    "partnerToken": "7feekach88p536fkmpt9",
+    "login": "89220000036",
+    "password": "04041986",
+    "UserToken": "1e284afc521c2084d37c5c1fdc087661",
+    "authedAt": "2026-10-30T10:22:56.225975282+05:00"
+  },
+  "cacheTime": 10800000000000
+}

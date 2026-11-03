@@ -1,0 +1,70 @@
+{
+	"http": {
+		"addr": ":59000",
+		"read_timeout": "15s",
+		"write_timeout": "65s",
+		"idle_timeout": "60s",
+		"request_timeout": "60s"
+	},
+	"database": {
+		"primary": "postgresql://pronogti:pronogti@localhost:5432/pronogti",
+		"primary111": "postgresql://pronogti:postgresql@192.168.1.177:5432/pronogti?sslmode=disable",
+		"secondaries": {}
+	},
+	"session": {
+		"enabled": true,
+		"cookie_name": "_s",
+		"cookie_domain": "",
+		"secure": false,
+		"same_site": "lax",
+		"max_life_time": 86400,
+		"max_idle_time": 3600,
+		"destroy_all_time": "03:00",
+		"redis": {
+		  "connect": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
+		  "namespace": "pronogti"
+		}
+	},
+	"cors": {
+		"allowed_origins": [
+			"http://localhost:5173"
+		],
+		"allowed_methods": [
+			"GET",
+			"POST",
+			"OPTIONS"
+		],
+		"allowed_headers": [
+			"Content-Type",
+			"Authorization",
+			"Accept",
+			"Origin",
+			"X-Requested-With",
+			"Query-Id"
+		],
+		"exposed_headers": [
+			"Content-Length",
+			"Content-Type",
+			"Query-Id"
+		],
+		"allow_credentials": true,
+		"max_age_seconds": 86400
+	},
+	"debug": {
+		"log_config": false,
+		"log_level": "debug",
+		"log_format": "text"
+	},
+	"yClients": {
+		"partnerToken": "7feekach88p536fkmpt9",
+		"login": "89220000036",
+		"password": "04041986",
+		"UserToken": "1e284afc521c2084d37c5c1fdc087661",
+		"authedAt": "2026-11-01T12:27:13.613287461+05:00"
+	},
+	"cache": {
+		"ttl": "3h"
+	},
+	"client_timeout": "60s",
+	"shutdown_timeout": "10s"
+}

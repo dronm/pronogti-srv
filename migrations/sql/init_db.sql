@@ -1,0 +1,4 @@
+CREATE USER pronogti WITH PASSWORD 'pronogti';
+CREATE DATABASE pronogti OWNER pronogti;
+GRANT ALL PRIVILEGES ON DATABASE pronogti TO pronogti;
+GRANT SELECT ON ALL TABLES IN SCHEMA public TO pronogti;
