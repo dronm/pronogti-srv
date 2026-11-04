@@ -21,8 +21,10 @@
 		"max_idle_time": 3600,
 		"destroy_all_time": "03:00",
 		"redis": {
-		  "connect": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
-		  "namespace": "pronogti"
+		  "connect_orig": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
+		  "namespace_orig": "pronogti",
+		  "connect": "redis://andrey:159753@localhost/0",
+		  "namespace": "meatshop"
 		}
 	},
 	"cors": {

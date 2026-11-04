@@ -1,0 +1,232 @@
+name: Salon
+comment: Salon is the company-scoped public directory entry and integration configuration owner.
+humanName: salon
+humanNamePlural: salons
+
+table:
+  schema: public
+  name: salons
+  checks:
+    - company_id > 0
+    - length(slug) BETWEEN 1 AND 100 AND slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+    - length(btrim(name)) BETWEEN 1 AND 200
+    - session_version > 0
+
+# Keep administrative CRUD separate from the existing public GET /salons.
+route: /admin/salons
+permissionPrefix: salon
+serviceName: Salon
+sessionRequired: true
+crudNotifications: false
+
+keys:
+  - name: company_id
+    pathName: company_id
+    type: bigint
+
+# All columns from migrations 000004, 000005, 000006 and 000008.
+fields:
+  - name: company_id
+    type: bigint
+    primaryKey: true
+    required: true
+    dbRequired: true
+    check: company_id > 0
+    comment: Existing YClients company ID; entered on creation, immutable on update.
+
+  - name: slug
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 100
+    unique: true
+    check: length(slug) BETWEEN 1 AND 100 AND slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$'
+
+  - name: name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 200
+    check: length(btrim(name)) BETWEEN 1 AND 200
+
+  - name: is_active
+    type: bool
+    required: true
+    dbRequired: true
+    default: "true"
+
+  - name: session_version
+    type: bigint
+    dbRequired: true
+    serverGenerated: true
+    default: "1"
+    check: session_version > 0
+    comment: Managed by the existing salons_before_update trigger; never submitted by the administrator.
+
+  - name: sort_order
+    type: int
+    required: true
+    dbRequired: true
+    default: "0"
+
+  - name: created_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+  # The existing composite foreign keys also enforce company ownership.
+  # Keep these nullable scalar IDs until profile reference components are added.
+  - name: default_payment_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: payment_profiles
+      column: id
+
+  - name: default_fiscal_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: fiscal_profiles
+      column: id
+
+  - name: default_yclients_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: yclients_profiles
+      column: id
+
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: false
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание салона
+    list: Просмотр списка салонов
+    detail: Просмотр салона
+    update: Изменение салона
+
+applicationRoute:
+  enabled: true
+  name: salons
+  path: /admin/salons
+  description: Салоны
+  section: Справочники
+  icon: pi pi-building
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Салоны
+  form:
+    enabled: true
+    columns: 2
+    createTitle: Новый салон
+    editTitle: Салон
+    copyTitle: Копия салона
+    fields:
+      - field: company_id
+        label: ID компании YClients
+        component: number
+        autofocus: true
+
+      - field: name
+        label: Наименование
+        component: text
+
+      - field: slug
+        label: Код в адресе сайта
+        component: text
+
+      - field: sort_order
+        label: Порядок отображения
+        component: number
+        default: 0
+
+      - field: is_active
+        label: Активен
+        component: checkbox
+        default: true
+
+      - field: default_payment_profile_id
+        label: Платёжный профиль по умолчанию
+        component: number
+
+      - field: default_fiscal_profile_id
+        label: Фискальный профиль по умолчанию
+        component: number
+
+      - field: default_yclients_profile_id
+        label: Профиль YClients по умолчанию
+        component: number
+
+      - field: session_version
+        label: Версия сессии
+        component: number
+        readOnly: true
+
+      - field: created_at
+        label: Создан
+        component: text
+        readOnly: true
+
+      - field: updated_at
+        label: Изменён
+        component: text
+        readOnly: true
+
+  # The generated SalonEditPage.vue is create-once and can later host
+  # a kiosk detail collection filtered by kiosks.company_id = salon.company_id.
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: company_id
+        label: ID компании
+        width: 10rem
+      - field: name
+        label: Наименование
+        width: 24rem
+      - field: slug
+        label: Код в адресе сайта
+        width: 18rem
+      - field: is_active
+        label: Активен
+        width: 8rem
+      - field: sort_order
+        label: Порядок
+        width: 8rem
+      - field: updated_at
+        label: Изменён
+        width: 14rem
+
+  routes:
+    listName: salons
+    createName: salonCreate
+    editName: salonEdit
+
+# The table, defaults, checks, composite foreign keys and session trigger
+# already belong to the project migrations. Never regenerate CREATE TABLE here.
+migration:
+  enabled: false
+
+test:
+  enabled: false

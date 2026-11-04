@@ -29,6 +29,7 @@ type Config struct {
 	HTTP               HTTPConfig       `json:"http"`
 	Database           DatabaseConfig   `json:"database"`
 	Session            SessionConfig    `json:"session"`
+	Admin              AdminConfig      `json:"admin"`
 	Checkout           CheckoutConfig   `json:"checkout"`
 	Fiscal             FiscalConfig     `json:"fiscal"`
 	Payments           PaymentsConfig   `json:"payments"`
@@ -226,6 +227,7 @@ func Load(path string) (*Config, error) {
 func defaultConfig() *Config {
 	return &Config{
 		Database:   DatabaseConfig{PrimaryEnv: "PRONOGTI_DATABASE_URL"},
+		Admin:      defaultAdminConfig(),
 		Checkout:   CheckoutConfig{MaxLifeTime: 900},
 		Fiscal:     FiscalConfig{WorkerEnabled: true, PollInterval: "2s"},
 		Payments:   PaymentsConfig{JWTKeyEnv: "PRONOGTI_PAYMENT_JWT_KEY", CreatingTimeoutSeconds: 120, WorkerEnabled: true, PollInterval: "2s", MockAutoPayAfter: "2s", WebhookPublicKeyEnv: "PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY"},
@@ -388,6 +390,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.Session.Validate(); err != nil {
+		return err
+	}
+	if err := c.Admin.Validate(c.Session); err != nil {
 		return err
 	}
 	return nil

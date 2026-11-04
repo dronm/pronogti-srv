@@ -99,3 +99,10 @@ Malformed filters/input return HTTP 400. Required registration, stale checkout i
 The legacy `/customer/me/save-pay-draft` and kiosk aliases are removed and return 404. Checkout preparation stores a local `payment_orders` snapshot; it does not mutate a YClients appointment. QR creation/reuse now writes durable `payments` attempts and calls the configured bank SDK for sandbox/production or external mock profiles. Default in-process mock mode sends no bank requests.
 
 Payment status reads return persisted state updated by independent bank reconciliation and verified callbacks. They include the paid order, YClients synchronization and receipt statuses. Card checkout uses the same status API with `method: "card"` and a `checkout_url`, and confirms payment through independent bank reads. See [card payments](card-payments.md). Refunds remain separate operations. The [receipt worker](fiscalization.md) consumes confirmed paid orders; displaying a QR does not issue a receipt.
+
+## Administrator API
+
+The same executable serves a separately authenticated `/admin/...` namespace.
+Login, session restoration, logout and starter shell endpoints use their own
+HttpOnly cookie and Redis namespace. Customer or kiosk credentials do not grant
+administrator access. See [administrator API and setup](admin.md).

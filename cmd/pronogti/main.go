@@ -170,7 +170,12 @@ func run() error {
 		httpapi.SalonScopeMiddleware(),
 	}
 	router := webapp.MustBuildRouter(appContext, httpapi.BuildRoutes(), middlewares...)
-	handler := httpapi.WithTochkaWebhook(router, webhook)
+	administrator, closeAdministrator, err := configuredAdministrator(cfg, db)
+	if err != nil {
+		return err
+	}
+	defer closeAdministrator()
+	handler := httpapi.WithTochkaWebhook(httpapi.WithAdministrator(router, administrator), webhook)
 
 	readTimeout, err := cfg.HTTPReadTimeout()
 	if err != nil {

@@ -40,10 +40,13 @@ Apply `000006_fiscal_receipts` for per-kiosk receipt profiles and durable receip
 
 Apply `000007_qr_attempt` for durable SBP QR attempts and JWT environment references. Select an enabled payment profile on a kiosk or salon. Default mock mode creates a nonpayable demo QR without bank HTTP requests; sandbox/production profiles use the bundled SDK. See [QR payments](docs/qr-payments.md).
 
-Apply all pending migrations through `000009_card_checkout` before starting this version. Bank confirmation runs independently of the browser, and a confirmed payment queues separate YClients synchronization and Terminal FA receipt jobs. The default built-in mock completes automatically on the server and performs no upstream financial or device writes. Production setup and recovery are covered in [QR payments](docs/qr-payments.md) and [card payments](docs/card-payments.md). Card checkout uses the bank-hosted card-only page and the same YClients/Terminal FA completion jobs. Cards remain disabled on existing profiles until explicitly configured.
+Apply all pending migrations through `000011_admin_navigation` before starting this version. Bank confirmation runs independently of the browser, and a confirmed payment queues separate YClients synchronization and Terminal FA receipt jobs. The default built-in mock completes automatically on the server and performs no upstream financial or device writes. Production setup and recovery are covered in [QR payments](docs/qr-payments.md) and [card payments](docs/card-payments.md). Card checkout uses the bank-hosted card-only page and the same YClients/Terminal FA completion jobs. Cards remain disabled on existing profiles until explicitly configured.
+
+The separate administrator Vue app lives at `dronm-workspace/apps/pronogti-admin`. Apply migrations through `000011_admin_navigation`, provision an administrator with `cmd/admin`, and use the isolated `/admin/...` API. Its shared menu includes Profile, Menu constructor, All forms, About and Logout, with saved role/user menus and a synchronized route registry. Generated collections, including `/admin/salons`, are registered automatically from codegen's service and route registries inside the administrator session and permission checks. See [administrator setup](docs/admin.md).
 
 ## Documentation
 
+- [Administrator app and authentication](docs/admin.md)
 - [Session workflow and device administration](docs/sessions.md)
 - [Authoritative checkout and payment schema](docs/checkout.md)
 - [SBP QR confirmation, recovery and bank profiles](docs/qr-payments.md)
@@ -61,11 +64,14 @@ Apply all pending migrations through `000009_card_checkout` before starting this
 | Directory | Contents |
 | --- | --- |
 | `cmd/pronogti` | API executable and dependency initialization |
+| `cmd/admin` | Administrator credential provisioning and password reset |
 | `cmd/kiosk` | Device provisioning, token rotation and enable/disable commands |
 | `cmd/salon` | Public salon name/slug and enable/disable commands |
 | `cmd/payment` | Inspect payments, confirm mock payments, retry never-dispatched failures and verify operator-attributed YClients transaction evidence |
 | `docs` | Technical documentation |
 | `documents` | Business and integration reference materials |
+| `internal/adminauth` | Administrator credentials, revocation and login audit |
+| `internal/adminnav` | Administrator menu trees, route registry and user references |
 | `internal/kiosk` | Session identities, kiosk registry and PostgreSQL implementation |
 | `internal/checkout` | Server-priced checkout preparation, exact amounts and PostgreSQL order persistence |
 | `internal/payment` | Durable QR/card attempts, signed notifications and independent bank reconciliation |
@@ -79,5 +85,6 @@ Apply all pending migrations through `000009_card_checkout` before starting this
 | `third_party/paytochkabank` | Uploaded Tochka bank SDK source dependency |
 | `third_party/goterminalfa` | Uploaded receipt driver source dependency |
 | `third_party/goyclients` | Customized YClients integration source dependency |
+| `third_party/session` | Session source snapshot with independent Redis providers |
 
 The backend prepares authoritative checkouts with integer-kopek amounts and durable ownership/idempotency records. Nonzero bonus redemption remains disabled until actual write-off support exists. The legacy draft-saving API is removed. QR and card creation reuse durable attempts; bank confirmation atomically marks the payment and order paid, then queues YClients and fiscal jobs independently. The browser observes their persisted states and cannot mark a production payment paid. Refunds and subscriptions remain separate operations.

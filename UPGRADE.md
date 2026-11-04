@@ -37,9 +37,24 @@ make test
 make build
 ```
 
-This version requires migration `000009_card_checkout`. Existing QR profiles
+Apply all pending migrations through `000011_admin_navigation`, including
+`000009_card_checkout`. Existing QR profiles
 continue working; card checkout is disabled until its acquiring settings are
 configured. See [card payments](docs/card-payments.md) and
 [QR payments](docs/qr-payments.md) for bank, synchronization and fiscal
 configuration. Do not delete previous payment records or external request
 journals to clear an uncertain outcome; recovery uses their original identities.
+
+Administrator login requires migration `000010_admin_auth` and a bcrypt password
+provisioned through `cmd/admin`. No legacy password is automatically accepted.
+Keep the bundled `third_party/session` directory and its Go module replacement:
+it isolates administrator and customer Redis managers. See
+[administrator setup](docs/admin.md) for credentials, cookie/origin configuration
+and installation of the separate Vue workspace app.
+
+Migration `000011_admin_navigation` adds the saved administrator menu and route
+registry, including a default Home entry. Restart the backend and rebuild the
+administrator Vue app together. Profile, Menu constructor, All forms, About and
+Logout are supplied by the shared menu. In All forms, synchronize the compiled
+route manifest after adding generated pages; saved menu entries retain their
+route IDs across synchronization.

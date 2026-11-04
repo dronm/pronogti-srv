@@ -4,7 +4,7 @@
 
 Use Go 1.25 or newer. webapp and modelbind are pinned to published revisions in `go.mod`.
 
-The application uses bundled source snapshots under `third_party` for the customized goyclients integration, Tochka SDK and Terminal FA driver. Their relative Go module replacements make the complete application build independent of a developer-specific checkout path.
+The application uses bundled source snapshots under `third_party` for the customized goyclients integration, Tochka SDK, Terminal FA driver and isolated Redis session providers. Their relative Go module replacements make the complete application build independent of a developer-specific checkout path.
 
 To intentionally work against a separate goyclients checkout, replace its module locally:
 
@@ -49,7 +49,7 @@ The Makefile resolves paths and its optional `.env` file from the project root, 
 
 Override build settings on the command line, for example `make prod VERSION=1.0.0` or `make build GO=/path/to/go`.
 
-The project does not currently contain an API integration-test package, codegen configuration/tool declaration, or deployment/SQL helpers. Those targets report missing prerequisites. Add deployment helpers under `internal/scripts/` to use their commands; set `DB_CONN` for database commands. No bot or frontend deployment targets are included.
+The project includes `codegen.yaml` and its first object definition, `schema/salon.yaml`; see [code generation schemas](../schema/README.md). Codegen is not declared as a Go tool dependency yet. The project does not currently contain an API integration-test package or deployment/SQL helpers. Targets with missing prerequisites report them. Add deployment helpers under `internal/scripts/` to use their commands; set `DB_CONN` for database commands. No bot or frontend deployment targets are included.
 
 ## Tests
 

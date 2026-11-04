@@ -13,6 +13,11 @@ require (
 )
 
 require (
+	github.com/dronm/codegen v0.0.0-20261030035837-bbcef5c031f5 // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
+)
+
+require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/dgryski/go-rendezvous v0.0.0-20200823014737-9f7001d12a5f // indirect
@@ -22,7 +27,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.9.2 // indirect
+	github.com/jackc/pgx/v5 v5.9.2
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
@@ -30,8 +35,9 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skip2/go-qrcode v0.0.0-20200617195104-da1b6568686e
 	go.bug.st/serial v1.6.4 // indirect
+	golang.org/x/crypto v0.42.0
 	golang.org/x/sync v0.17.0 // indirect
-	golang.org/x/sys v0.22.0 // indirect
+	golang.org/x/sys v0.36.0 // indirect
 	modernc.org/libc v1.55.3 // indirect
 	modernc.org/mathutil v1.6.0 // indirect
 	modernc.org/memory v1.8.0 // indirect
@@ -48,3 +54,7 @@ tool github.com/dronm/goterminalfa/cmd/goterminalfa
 replace github.com/dronm/goyclients => ./third_party/goyclients
 
 replace github.com/dronm/paytochkabank => ./third_party/paytochkabank
+
+replace github.com/dronm/session => ./third_party/session
+
+tool github.com/dronm/codegen/cmd/codegen
