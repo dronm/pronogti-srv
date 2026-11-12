@@ -8,24 +8,78 @@
 	},
 	"database": {
 		"primary": "postgresql://pronogti:pronogti@localhost:5432/pronogti",
-		"primary111": "postgresql://pronogti:postgresql@192.168.1.177:5432/pronogti?sslmode=disable",
-		"secondaries": {}
+		"primary_env": "PRONOGTI_DATABASE_URL"
 	},
 	"session": {
 		"enabled": true,
 		"cookie_name": "_s",
+		"kiosk_cookie_name": "_pronogti_kiosk",
+		"kiosk_cookie_max_age": 34560000,
 		"cookie_domain": "",
 		"secure": false,
 		"same_site": "lax",
 		"max_life_time": 86400,
 		"max_idle_time": 3600,
 		"destroy_all_time": "03:00",
+		"customer_max_life_time": 1800,
+		"customer_max_idle_time": 180,
 		"redis": {
-		  "connect_orig": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
-		  "namespace_orig": "pronogti",
-		  "connect": "redis://andrey:159753@localhost/0",
-		  "namespace": "meatshop"
+			"connect": "redis://pronogti:2a1d47bb00d1c4e03e5e27e20f86dc094ba8a35e6da08e9a89a5e3460af4c8b9@192.168.1.177:5015/0",
+			"namespace": "pronogti"
 		}
+	},
+	"admin": {
+		"enabled": true,
+		"cookie_name": "pronogti_admin_session",
+		"cookie_domain": "",
+		"cookie_path": "/",
+		"same_site": "lax",
+		"max_life_time": 28800,
+		"max_idle_time": 1800,
+		"redis_namespace": "pronogti_admin",
+		"allowed_origins": [
+			"http://localhost:5174",
+			"http://127.0.0.1:5174"
+		]
+	},
+	"checkout": {
+		"max_life_time": 900
+	},
+	"fiscal": {
+		"worker_enabled": true,
+		"allow_live": false,
+		"poll_interval": "2s"
+	},
+	"payments": {
+		"jwt_key": "abf723c42140fd1fdf089aa6aaaf6fdd8b444f20512b7b3569221431dda6ff67",
+		"mock_external": false,
+		"creating_timeout_seconds": 120,
+		"worker_enabled": true,
+		"poll_interval": "2s",
+		"mock_auto_pay_after": "2s",
+		"webhook_enabled": false,
+		"webhook_public_key": "-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAwvo25bk7/M4oaDTOSxFU\nvM33yUDeNg3E9LMyrbrkFS0UMESeINdAhmQgCnnAr2l7bH2yr6SrTyyAE2MNB21Q\n33VmPAVlqEYqsPPbA5Uqaea2O4s0fnpr8XoT8O5s9kbMR183HxHSqedvOhs/S+68\nKVVX/C+sy9BFuDm3pgHN6wNqIHO6bBJ9U3lI06Y7CoiJOqPA1kp0avQKe34YwSw6\njDjOxmw4pBJ3R2563YHcXC/xPxGwPzkF5snIbHiK6u1SNf3SRelacH0TqZl0mDJS\n8jnozEbQ7KgcVz4Oal5n1ia/KOHHp1c1jAb96wBN7h1u+SbOKI8YcElDp46yxUcC\n2wIDAQAB\n-----END PUBLIC KEY-----\n",
+		"webhook_public_key_env": "PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY"
+	},
+	"receipt_email": {
+		"enabled": false,
+		"smtp_host": "",
+		"smtp_port": 587,
+		"smtp_tls_mode": "starttls",
+		"smtp_username": "",
+		"smtp_password_env": "PRONOGTI_RECEIPT_SMTP_PASSWORD",
+		"from": "",
+		"timeout": "10s",
+		"saby_devices": null
+	},
+	"refunds": {
+		"enabled": false,
+		"allow_live": false
+	},
+	"settlement": {
+		"worker_enabled": true,
+		"allow_live": false,
+		"poll_interval": "2s"
 	},
 	"cors": {
 		"allowed_origins": [
@@ -34,7 +88,8 @@
 		"allowed_methods": [
 			"GET",
 			"POST",
-			"OPTIONS"
+			"OPTIONS",
+			"DELETE"
 		],
 		"allowed_headers": [
 			"Content-Type",
@@ -42,7 +97,10 @@
 			"Accept",
 			"Origin",
 			"X-Requested-With",
-			"Query-Id"
+			"Query-Id",
+			"X-Customer-Session",
+			"X-Salon-Session",
+			"Idempotency-Key"
 		],
 		"exposed_headers": [
 			"Content-Length",
@@ -62,7 +120,7 @@
 		"login": "89220000036",
 		"password": "04041986",
 		"UserToken": "1e284afc521c2084d37c5c1fdc087661",
-		"authedAt": "2026-11-01T12:27:13.613287461+05:00"
+		"authedAt": "2026-11-09T16:16:26.525571969+05:00"
 	},
 	"cache": {
 		"ttl": "3h"

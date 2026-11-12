@@ -116,6 +116,7 @@ type Dependencies struct {
 	CreatingTimeout time.Duration
 	MockExternal    bool
 	ValidatePayable func(context.Context, checkout.Order) error
+	ReceiptEmail    *ReceiptEmailDependencies
 }
 
 type Options struct {
@@ -125,27 +126,53 @@ type Options struct {
 
 // View intentionally omits provider/credential identifiers and internal errors.
 type View struct {
-	PaymentID          string     `json:"payment_id"`
-	CheckoutID         string     `json:"checkout_id"`
-	State              string     `json:"state"`
-	AmountKopecks      int64      `json:"amount_kopecks"`
-	Currency           string     `json:"currency"`
-	Environment        string     `json:"environment"`
-	ExpiresAt          *time.Time `json:"expires_at"`
-	Payload            string     `json:"payload,omitempty"`
-	QRImageURL         string     `json:"qr_image_url,omitempty"`
-	ErrorCode          string     `json:"error_code,omitempty"`
-	OrderState         string     `json:"order_state"`
-	YClientsSyncStatus string     `json:"yclients_sync_status"`
-	FiscalStatus       string     `json:"fiscal_status"`
-	PaidAt             *time.Time `json:"paid_at,omitempty"`
-	BankReference      string     `json:"bank_reference,omitempty"`
-	Method             string     `json:"method"`
-	CheckoutURL        string     `json:"checkout_url,omitempty"`
+	PaymentID          string       `json:"payment_id"`
+	CheckoutID         string       `json:"checkout_id"`
+	State              string       `json:"state"`
+	AmountKopecks      int64        `json:"amount_kopecks"`
+	Currency           string       `json:"currency"`
+	Environment        string       `json:"environment"`
+	ExpiresAt          *time.Time   `json:"expires_at"`
+	Payload            string       `json:"payload,omitempty"`
+	QRImageURL         string       `json:"qr_image_url,omitempty"`
+	ErrorCode          string       `json:"error_code,omitempty"`
+	OrderState         string       `json:"order_state"`
+	YClientsSyncStatus string       `json:"yclients_sync_status"`
+	FiscalStatus       string       `json:"fiscal_status"`
+	PaidAt             *time.Time   `json:"paid_at,omitempty"`
+	BankReference      string       `json:"bank_reference,omitempty"`
+	Method             string       `json:"method"`
+	CheckoutURL        string       `json:"checkout_url,omitempty"`
+	Receipt            *ReceiptView `json:"receipt,omitempty"`
+	receiptEmailURL    string
+}
+
+// ReceiptView contains only checkout lines and public fiscal document details.
+type ReceiptView struct {
+	Kind           string            `json:"kind"`
+	Items          []ReceiptItemView `json:"items"`
+	TotalKopecks   int64             `json:"total_kopecks"`
+	Currency       string            `json:"currency"`
+	DateTime       string            `json:"date_time,omitempty"`
+	FiscalSign     *uint32           `json:"fiscal_sign,omitempty"`
+	DocumentNumber *uint32           `json:"document_number,omitempty"`
+	ReceiptNumber  *uint16           `json:"receipt_number,omitempty"`
+	ShiftNumber    *uint16           `json:"shift_number,omitempty"`
+	EmailAvailable bool              `json:"email_available,omitempty"`
+}
+
+type ReceiptItemView struct {
+	Name             string `json:"name"`
+	Quantity         string `json:"quantity"`
+	UnitPriceKopecks int64  `json:"unit_price_kopecks"`
+	AmountKopecks    int64  `json:"amount_kopecks"`
 }
 
 type Completion struct {
 	OrderState, YClientsSyncStatus, FiscalStatus string
 	PaidAt                                       *time.Time
 	BankReference                                string
+	Receipt                                      *ReceiptView
+	receiptDriverBaseURL                         string
+	receiptDeviceID                              string
 }

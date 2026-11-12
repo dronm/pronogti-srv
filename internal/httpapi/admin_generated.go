@@ -3,6 +3,7 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"reflect"
 	"sort"
 	"strings"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/dronm/ds/v4"
 	"github.com/dronm/modelbind/metadata"
+	"github.com/dronm/pronogti/internal/fiscal"
 	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/webapp"
 )
@@ -25,6 +27,8 @@ var generatedAdminServiceRegistration = sync.OnceValue(func() (err error) {
 	return nil
 })
 
+const fiscalDriverConnectionsEnv = "PRONOGTI_FISCAL_ALLOWED_DRIVER_CONNECTIONS"
+
 // NewGeneratedAdminHandler connects codegen's registries to the administrator
 // API. Mount it through AdminHTTPOptions so it uses the administrator's existing
 // Redis, CORS and origin middleware rather than the public kiosk/customer stack.
@@ -38,6 +42,10 @@ func NewGeneratedAdminHandler(service AdminService, db ds.Provider, requestTimeo
 			err = fmt.Errorf("build generated administrator routes: %v", value)
 		}
 	}()
+	fiscalConnections, err := fiscal.ParseAllowedDriverConnections(os.Getenv(fiscalDriverConnectionsEnv))
+	if err != nil {
+		return nil, nil, fmt.Errorf("%s: %w", fiscalDriverConnectionsEnv, err)
+	}
 	if err := generatedAdminServiceRegistration(); err != nil {
 		return nil, nil, err
 	}
@@ -46,16 +54,30 @@ func NewGeneratedAdminHandler(service AdminService, db ds.Provider, requestTimeo
 		return nil, nil, err
 	}
 	allowed := make(map[string]struct{}, len(routes))
+	credentialTokens := paymentProfileCredentialTokens.Load()
 	for index := range routes {
 		route := &routes[index]
 		allowed[route.Permission] = struct{}{}
+		credentialWrite := route.Name == paymentProfileCredentialWriteRoute
+		profileDiscovery := route.Name == paymentProfileDiscoveryRoute
+		profileUpdate := route.ServiceName == "PaymentProfile" && route.ServiceFunc == "Update"
+		if credentialTokens != nil && (credentialWrite || profileUpdate || profileDiscovery) {
+			route.Middleware = append([]webapp.Middleware{
+				paymentProfileCredentialMiddleware(credentialTokens),
+			}, route.Middleware...)
+		}
 		if route.ServiceFunc == "Create" || route.ServiceFunc == "Update" {
 			route.Binder = generatedAdminWriteBinder(route.Binder, route.ServiceFunc == "Update")
+			if route.ServiceName == "FiscalProfile" {
+				route.Middleware = append([]webapp.Middleware{
+					fiscalDriverConnectionsMiddleware(fiscalConnections),
+				}, route.Middleware...)
+			}
 		}
 		// Authentication and permission checks run before this middleware and
 		// the generated binder. Requiring a JSON body prevents query parameters
 		// from being decoded as a create/update request.
-		route.Middleware = append([]webapp.Middleware{generatedAdminRequestMiddleware()}, route.Middleware...)
+		route.Middleware = append([]webapp.Middleware{generatedAdminRequestMiddleware(!credentialWrite && !profileDiscovery)}, route.Middleware...)
 	}
 	permissions = make([]string, 0, len(allowed))
 	for permission := range allowed {
@@ -67,6 +89,14 @@ func NewGeneratedAdminHandler(service AdminService, db ds.Provider, requestTimeo
 		PermissionChecker: generatedAdminPermissionChecker(service, allowed),
 	}
 	return webapp.MustBuildRouter(app, routes), permissions, nil
+}
+
+func fiscalDriverConnectionsMiddleware(connections []fiscal.DriverConnection) webapp.Middleware {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			next.ServeHTTP(w, r.WithContext(services.WithFiscalDriverConnections(r.Context(), connections)))
+		})
+	}
 }
 
 // Older modelbind update helpers can assign submitted primary-key and srvCalc
@@ -109,6 +139,9 @@ func buildGeneratedAdminRoutes() ([]webapp.Route, error) {
 	var routes []webapp.Route
 	group := webapp.NewGroup("", &routes)
 	registerGeneratedRoutes(&group)
+	registerKioskManagementRoutes(&group)
+	registerPaymentProfileCredentialRoutes(&group)
+	registerPaymentProfileDiscoveryRoutes(&group)
 	if err := webapp.ValidateRoutes(routes); err != nil {
 		return nil, fmt.Errorf("validate generated administrator routes: %w", err)
 	}
@@ -136,7 +169,7 @@ func generatedAdminPermissionChecker(service AdminService, allowed map[string]st
 	}
 }
 
-func generatedAdminRequestMiddleware() webapp.Middleware {
+func generatedAdminRequestMiddleware(validateWriteBody bool) webapp.Middleware {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if len(r.URL.RawQuery) > 32<<10 {
@@ -145,6 +178,9 @@ func generatedAdminRequestMiddleware() webapp.Middleware {
 			}
 			switch r.Method {
 			case http.MethodPost, http.MethodPut, http.MethodPatch:
+				if !validateWriteBody {
+					break
+				}
 				// The generated model binder validates field types, required
 				// presence and server-calculated fields after this envelope check.
 				if _, err := navigationJSON(w, r, 1<<20, nil); err != nil {

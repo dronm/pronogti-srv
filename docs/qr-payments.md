@@ -23,6 +23,12 @@ and returns the persisted attempt. It does not query the bank. Kiosk aliases are
 `/kiosk/init-qr-pay`, `/kiosk/payments/{id}`, `/kiosk/me/init-qr-pay` and
 `/kiosk/me/payments/{id}`; they additionally require kiosk mode.
 
+Once a paid attempt has an issued or demo receipt, the status response includes
+`receipt` with the frozen checkout lines and total. `kind: "demo"` identifies
+a test payment summary. For `kind: "fiscal"`, the receipt may include the
+register's local date and time, fiscal sign, document number, receipt number,
+and shift number. The device's raw payload and customer contact stay private.
+
 ## Attempt states
 
 | State | Meaning |
@@ -55,17 +61,46 @@ Profiles must belong to that company and be enabled. Their bank identity and
 settings are frozen on each attempt, so changing a binding does not redirect an
 existing QR to another merchant.
 
-`payment_profiles.jwt_env` names an environment variable containing the JWT.
-The secret itself is not stored in the profile snapshot or sent to the frontend.
-Existing `jwt_ciphertext` values are supported through the configured
-`payments.jwt_key_env`. The key is 32 bytes encoded as hex or standard base64;
-the bytea format is version byte `1`, a 12-byte nonce, then AES-256-GCM ciphertext
-and authentication tag. Additional authenticated data is
-`pronogti:tochka:COMPANY_ID:PROFILE_ID`. Prefer `jwt_env` unless you already have
-credential-encryption tooling; plaintext JWT bytes are not ciphertext.
+In the admin app, create a disabled profile, then add the Tochka JWT from the
+profile's edit page. Once the token and bank identifiers are in place, enable
+the profile and assign it to a salon or kiosk. Use the same page to replace the
+token. Disabling a profile stops new payments while retaining the credentials
+needed to check or refund existing payments.
 
-The direct SBP `account_id` value has the form `ACCOUNT_NUMBER/BIC`. It identifies
-the Tochka bank account and is unrelated to a YClients financial cashdesk ID.
+After saving the JWT on a sandbox or production profile, click **Заполнить из
+Точка Банка** to look up the company code and the SBP and card acquiring merchant
+IDs. Select the company or outlet if Tochka returns several eligible choices.
+Review the suggested values and save the profile. The lookup uses the saved
+credential and performs read-only bank requests. It requires the Tochka permissions
+`ReadCustomerData`, `ReadSBPData` and `ReadAcquiringData`. Use a sandbox profile
+to try the lookup with Tochka's fixed examples.
+
+The backend resolves `github.com/dronm/paytochkabank` through its local
+`third_party/paytochkabank` replacement in `go.mod`. It includes the standalone
+library's lookup methods and the card status decoder that accepts Tochka's
+`Data.Operation` response.
+
+The backend encrypts tokens saved in the admin app using `payments.jwt_key`
+from its private config file. The key is 32 bytes encoded as hex or standard
+base64. Keep the exact same key when moving it into the config so existing
+tokens remain decryptable. Restart Pronogti with that config file.
+
+If `payments.jwt_key` is omitted or empty, Pronogti reads the encryption key
+from the variable named by `payments.jwt_key_env`, which defaults to
+`PRONOGTI_PAYMENT_JWT_KEY`. A legacy `payment_profiles.jwt_env` names the
+environment variable holding the profile's bank JWT. Saving a JWT from the
+admin app replaces that reference with encrypted bytes. Admin responses and
+payment snapshots omit the token.
+
+The bytea format is version byte `1`, a 12-byte nonce, then AES-256-GCM ciphertext
+and authentication tag. Additional authenticated data is
+`pronogti:tochka:COMPANY_ID:PROFILE_ID`.
+
+Enter the 20-digit settlement account number in the payment profile. The backend
+uses Tochka's BIC `044525104` when registering an SBP QR code or submitting an
+SBP refund. Existing profiles that contain a full `ACCOUNT_NUMBER/BIC` keep
+their saved BIC. The account identifies the Tochka bank account and is unrelated
+to a YClients financial cashdesk ID.
 `qr_ttl_minutes`, `http_timeout_seconds`, merchant/customer identifiers and the
 API base URL are configured per profile. The usable lifetime is also bounded by
 the checkout's expiry.
@@ -89,7 +124,7 @@ INSERT INTO public.payment_profiles (
 ) VALUES (
 	781898, 'Local QR demo', 'mock', 'http://127.0.0.1:8099',
 	'PRONOGTI_TOCHKA_DEMO_JWT', 'demo-client', 'demo-customer',
-	'MF0000000001', '40702810900000000001/044525104', 15, 20, true
+	'MF0000000001', '40702810900000000001', 15, 20, true
 )
 RETURNING id;
 ```
@@ -106,19 +141,19 @@ UPDATE public.salons SET default_payment_profile_id = 1
 WHERE company_id = 781898;
 ```
 
-For an external local mock endpoint, set `payments.mock_external: true` and
-populate the named variable with a phony JWT, for example
-`export PRONOGTI_TOCHKA_DEMO_JWT=phony.jwt.token`. External mock URLs must be
-loopback URLs. The SDK sends the real request shape to that fake server.
+For an external mock endpoint, enter a loopback URL in the admin profile's API
+URL control, set `payments.mock_external: true`, and save a phony JWT such as
+`phony.jwt.token`. The SDK sends the real request shape to that fake server.
+Loopback refers to the host or container where the Pronogti backend runs.
 
 ## Sandbox and production
 
-Tochka sandbox uses `environment: "sandbox"`, base URL
-`https://enter.tochka.com/sandbox/v2`, and JWT `sandbox.jwt.token` in the variable
-named by `jwt_env`. Sandbox responses may contain fixed example identifiers;
-they are not a stateful payment simulator. The backend also supports a loopback
-mock endpoint for sandbox testing. Production profiles require HTTPS and actual
-bank credentials/merchant/account settings.
+The admin API URL control has presets for Tochka sandbox and production. For the
+sandbox preset, save `sandbox.jwt.token` as the JWT. Sandbox responses may contain
+fixed example identifiers. Select the built-in mock to simulate a payment or type
+a loopback URL in a test profile to use a local mock server. The admin production
+preset uses `https://enter.tochka.com/uapi` and requires actual bank credentials
+and merchant/account settings.
 
 Use an HTTP request deadline longer than the profile's bank timeout; the example
 configuration uses `http.request_timeout: "60s"` and `http.write_timeout: "65s"`.
@@ -135,10 +170,14 @@ verified transaction or operation ID; a digital-ruble notification can lack a
 refund reference, and the backend does not invent one. Local display expiry
 and a failed payment attempt are not proof that a QR can no longer receive money.
 
-Optionally enable signed callbacks with `payments.webhook_enabled: true`. Put
-the bank's PEM or RSA JWK public key in the variable named by
-`payments.webhook_public_key_env`, then register the externally reachable HTTPS
-callback URL with Tochka:
+Enable signed callbacks with `payments.webhook_enabled: true`. Set
+`payments.webhook_public_key` to the verification key as a JSON string. For the
+Mockoon sender, generate its keypair once with `node send-sbp-webhook.ts keys`.
+Run `jq -Rs . < .tochka-webhook-keys/public.pem` to get the escaped JSON value.
+Keep the matching private key with the sender.
+
+For live callbacks, use [Tochka's OpenAPI public key](https://enter.tochka.com/doc/openapi/static/keys/public)
+and register the externally reachable HTTPS callback URL with Tochka.
 
 ```text
 https://YOUR_API_HOST/payments/tochka/webhook

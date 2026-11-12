@@ -74,5 +74,9 @@
 	},
 	"checkout": {
 		"max_life_time": 900
+	},
+	"payments": {
+		"webhook_enabled": false,
+		"webhook_public_key": ""
 	}
 }

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -394,10 +395,28 @@ func TestCardIntegrationProductionQueuesLiveDownstreamAdapters(t *testing.T) {
 	order := completionOrder(t, provider, actor, "card-live-checkout")
 	repository := NewPostgresRepository(provider)
 	service := NewService(Dependencies{Repository: repository, CardBank: cardIntegrationCreateApproved{}, Tokens: cardIntegrationTokens{}}, Options{})
+	var emails atomic.Int32
+	service.dependencies.ReceiptEmail = &ReceiptEmailDependencies{
+		RegistrationNumber: func(baseURL, deviceID string) string {
+			if baseURL == device.URL && deviceID == "card-kkt" {
+				return "0000000000000123"
+			}
+			return ""
+		},
+		Send: func(_ context.Context, email, link, dateTime string) error {
+			if email != "customer@example.test" || link != "https://saby.ru/ofd/check/rec/0000000000000123/031126/123456" ||
+				dateTime != "2026-11-03T10:00" {
+				t.Errorf("wrong receipt email: %q %q %q", email, link, dateTime)
+			}
+			emails.Add(1)
+			return nil
+		},
+	}
 	view, err := service.InitCard(ctx, actor, "card:"+order.ID, order.ID)
 	if err != nil || view.State != "pending" {
 		t.Fatalf("card creation response credited payment: %+v, %v", view, err)
 	}
+	qrRequireStatus(t, service.SendReceiptEmail(ctx, actor, view.PaymentID, "customer@example.test"), 409)
 	crm := &cardIntegrationLiveCRM{t: t}
 	crmWorker := settlement.NewWorker(settlement.NewPostgresRepository(provider), crm, settlement.Options{AllowLive: true})
 	receiptWorker := fiscal.NewWorker(fiscal.NewPostgresRepository(provider), fiscal.HTTPDriver{}, fiscal.Options{AllowLive: true})
@@ -422,6 +441,49 @@ func TestCardIntegrationProductionQueuesLiveDownstreamAdapters(t *testing.T) {
 	view, err = service.Get(ctx, actor, view.PaymentID)
 	if err != nil || view.State != "paid" || view.YClientsSyncStatus != "succeeded" || view.FiscalStatus != "issued" || crm.plans != 1 || crm.writes != 2 || receiptCalls != 1 {
 		t.Fatalf("card live completion: %+v err=%v CRM plans=%d writes=%d receipts=%d", view, err, crm.plans, crm.writes, receiptCalls)
+	}
+	if view.Receipt == nil || view.Receipt.Kind != "fiscal" || !view.Receipt.EmailAvailable || view.Receipt.DateTime != "2026-11-03T10:00" ||
+		view.Receipt.FiscalSign == nil || *view.Receipt.FiscalSign != 123456 || view.Receipt.DocumentNumber == nil || *view.Receipt.DocumentNumber != 10 ||
+		len(view.Receipt.Items) != 1 || view.Receipt.Items[0].Quantity != "1" || view.Receipt.Items[0].UnitPriceKopecks != 12345 {
+		t.Fatalf("live receipt: %+v", view.Receipt)
+	}
+	other := actor
+	other.CustomerSessionID = "another-customer-session"
+	qrRequireStatus(t, service.SendReceiptEmail(ctx, other, view.PaymentID, "customer@example.test"), 404)
+	qrRequireStatus(t, service.SendReceiptEmail(ctx, actor, view.PaymentID, "bad@example.test\r\nBcc: x@example.test"), 400)
+	var sends sync.WaitGroup
+	outcomes := make(chan error, 5)
+	for range 5 {
+		sends.Go(func() {
+			outcomes <- service.SendReceiptEmail(ctx, actor, view.PaymentID, "customer@example.test")
+		})
+	}
+	sends.Wait()
+	close(outcomes)
+	rejected := 0
+	for err := range outcomes {
+		if err != nil {
+			qrRequireStatus(t, err, 429)
+			rejected++
+		}
+	}
+	if emails.Load() != 1 || rejected != 4 {
+		t.Fatalf("concurrent sends=%d rejected=%d", emails.Load(), rejected)
+	}
+	for range 2 {
+		if _, err := conn.Exec(ctx, `UPDATE public.fiscal_receipts SET email_attempted_at=now()-interval '31 seconds' WHERE payment_id=$1`, view.PaymentID); err != nil {
+			t.Fatal(err)
+		}
+		if err := service.SendReceiptEmail(ctx, actor, view.PaymentID, "customer@example.test"); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := conn.Exec(ctx, `UPDATE public.fiscal_receipts SET email_attempted_at=now()-interval '31 seconds' WHERE payment_id=$1`, view.PaymentID); err != nil {
+		t.Fatal(err)
+	}
+	qrRequireStatus(t, service.SendReceiptEmail(ctx, actor, view.PaymentID, "customer@example.test"), 429)
+	if emails.Load() != 3 {
+		t.Fatalf("receipt cap failed: sent=%d", emails.Load())
 	}
 }
 

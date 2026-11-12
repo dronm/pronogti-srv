@@ -36,6 +36,35 @@ func (m Salon) CollectionAgg() any {
 	return &wmodels.TotCount{TotCount: 0}
 }
 
+const salonDetailRelation = "public.salons_detail"
+
+// SalonDetail is the detail projection for salons.
+type SalonDetail struct {
+	CompanyID                int64           `json:"company_id" primaryKey:"true" required:"true"`
+	Slug                     string          `json:"slug" required:"true"`
+	Name                     string          `json:"name" required:"true"`
+	IsActive                 bool            `json:"is_active" required:"true"`
+	SessionVersion           int64           `json:"session_version"`
+	SortOrder                int             `json:"sort_order" required:"true"`
+	CreatedAt                time.Time       `json:"created_at"`
+	UpdatedAt                time.Time       `json:"updated_at"`
+	DefaultPaymentProfileID  *int64          `json:"default_payment_profile_id"`
+	DefaultFiscalProfileID   *int64          `json:"default_fiscal_profile_id"`
+	DefaultYclientsProfileID *int64          `json:"default_yclients_profile_id"`
+	Company                  map[string]any  `json:"company"`
+	DefaultPaymentProfile    *map[string]any `json:"default_payment_profile"`
+	DefaultFiscalProfile     *map[string]any `json:"default_fiscal_profile"`
+	DefaultYclientsProfile   *map[string]any `json:"default_yclients_profile"`
+}
+
+func (m SalonDetail) Relation() string {
+	return salonDetailRelation
+}
+
+func (m SalonDetail) CollectionAgg() any {
+	return &wmodels.TotCount{TotCount: 0}
+}
+
 // SalonKey is used for detail, update, and delete WHERE clauses.
 type SalonKey struct {
 	CompanyID int64 `json:"company_id" primaryKey:"true" required:"true"`

@@ -42,6 +42,7 @@ func requireBankError(t *testing.T, err error, code string, unknown bool) {
 
 func TestSDKBankUsesExactDynamicQRContractAndRendersPayloadPNG(t *testing.T) {
 	request := bankRequestFixture()
+	request.Profile.AccountID = "40817810802000000008"
 	calls := 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		calls++
@@ -87,6 +88,13 @@ func TestSDKBankUsesExactDynamicQRContractAndRendersPayloadPNG(t *testing.T) {
 	}
 	if result.QRCID == "" || !result.ExpiresAt.Equal(request.StartedAt.Add(15*time.Minute)) || result.ExpiresAt.Location() != time.UTC {
 		t.Fatalf("wrong result/UTC expiry: %+v", result)
+	}
+}
+
+func TestTochkaAccountIDPreservesExplicitBIC(t *testing.T) {
+	const explicit = "40817810802000000008/049999999"
+	if actual := TochkaAccountID(explicit); actual != explicit {
+		t.Fatalf("TochkaAccountID(%q) = %q", explicit, actual)
 	}
 }
 

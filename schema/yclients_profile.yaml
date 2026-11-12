@@ -1,0 +1,250 @@
+name: YClientsProfile
+comment: Company-owned YClients payment settlement settings.
+humanName: YClients profile
+humanNamePlural: YClients profiles
+
+enums:
+  - name: catalogue_execution_mode
+    goType: CatalogueExecutionMode
+    sqlType: text
+    frontendName: CatalogueExecutionMode
+    values:
+      - value: demo
+        label: Демо
+      - value: live
+        label: Рабочий
+
+  - name: yclients_service_policy
+    goType: YClientsServicePolicy
+    sqlType: text
+    frontendName: YClientsServicePolicy
+    values:
+      - value: require_visit
+        label: Требовать визит
+      - value: financial_income
+        label: Финансовое поступление
+
+table:
+  schema: public
+  name: yclients_profiles
+
+route: /admin/yclients-profiles
+permissionPrefix: yclientsProfile
+serviceName: YClientsProfile
+sessionRequired: true
+crudNotifications: false
+
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    serverGenerated: true
+
+  - name: company_id
+    type: bigint
+    required: true
+    dbRequired: true
+    references:
+      schema: public
+      table: salons
+      column: company_id
+
+  - name: name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 200
+
+  - name: mode
+    type: enum
+    enum: catalogue_execution_mode
+    required: true
+    dbRequired: true
+    default: "'demo'"
+
+  - name: enabled
+    type: bool
+    required: true
+    dbRequired: true
+    default: "true"
+
+  - name: cashless_account_id
+    type: bigint
+    dbRequired: true
+    default: "0"
+    valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    comment: YClients cashless account ID. Zero means unconfigured in demo mode.
+
+  - name: storage_id
+    type: bigint
+    dbRequired: true
+    default: "0"
+    valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    comment: YClients goods warehouse ID. Zero means unconfigured.
+
+  - name: service_policy
+    type: enum
+    enum: yclients_service_policy
+    required: true
+    dbRequired: true
+    default: "'financial_income'"
+
+  - name: service_income_expense_id
+    type: bigint
+    dbRequired: true
+    default: "0"
+    valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    comment: YClients income article ID for a standalone service purchase. Zero means unconfigured.
+
+  - name: config_version
+    type: bigint
+    dbRequired: true
+    serverGenerated: true
+    default: "1"
+
+  - name: created_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+list:
+  model: YClientsProfileList
+  table:
+    schema: public
+    name: yclients_profiles_list
+  fields:
+    - name: id
+      type: bigint
+      primaryKey: true
+    - name: company_id
+      type: bigint
+      required: true
+    - name: name
+      type: text
+      required: true
+    - name: mode
+      type: enum
+      enum: catalogue_execution_mode
+      required: true
+    - name: enabled
+      type: bool
+      required: true
+      default: "true"
+    - name: cashless_account_id
+      type: bigint
+      default: "0"
+      valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    - name: storage_id
+      type: bigint
+      default: "0"
+      valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    - name: service_policy
+      type: enum
+      enum: yclients_service_policy
+      required: true
+    - name: service_income_expense_id
+      type: bigint
+      default: "0"
+      valibot: v.pipe(v.number(), v.safeInteger(), v.minValue(0))
+    - name: config_version
+      type: bigint
+    - name: created_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+    - name: company
+      type: json
+      nullable: true
+
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: false
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание профиля YClients
+    list: Просмотр списка профилей YClients
+    detail: Просмотр профиля YClients
+    update: Изменение профиля YClients
+
+applicationRoute:
+  enabled: true
+  name: yclientsProfiles
+  path: /admin/yclients-profiles
+  description: Профили YClients
+  section: Справочники
+  icon: pi pi-yclients_profiles
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Профили YClients
+  form:
+    enabled: false
+  list:
+    editMode: inline
+    pageSize: 30
+    columns:
+      - field: id
+        label: ID
+        width: 6rem
+      - field: company_id
+        label: Компания
+        sortField: "company->>'descr'"
+        editable: true
+        reference:
+          name: companyReference
+          import: "@/references/catalogueReferences"
+          field: company
+      - field: name
+        label: Наименование
+        width: 20rem
+      - field: mode
+        label: Режим
+      - field: enabled
+        label: Активен
+      - field: cashless_account_id
+        label: ID безналичной кассы
+        editorProps:
+          min: 0
+      - field: storage_id
+        label: ID склада
+        editorProps:
+          min: 0
+      - field: service_policy
+        label: Оплата услуги без визита
+      - field: service_income_expense_id
+        label: ID статьи доходов
+        editorProps:
+          min: 0
+      - field: updated_at
+        label: Изменён
+        width: 14rem
+  routes:
+    listName: yclientsProfiles
+
+# Migration 000008 owns the table; the admin list view has its own migration.
+migration:
+  enabled: false
+
+test:
+  enabled: false

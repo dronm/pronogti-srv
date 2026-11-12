@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -81,6 +82,9 @@ func (s *adminTestService) Logout(ctx context.Context, sess session.Session, non
 	}
 	return sess.Delete("test_admin")
 }
+func (s *adminTestService) ChangePassword(context.Context, session.Session, string, adminauth.PasswordChange) error {
+	return errors.New("unexpected password change")
+}
 func (s *adminTestService) Invalidate(_ context.Context, sess session.Session) error {
 	s.invalidations++
 	return sess.Delete("test_admin")
@@ -121,8 +125,8 @@ func TestAdministratorHTTPRotatesCookieAndNeverAuthenticatesReturnFlags(t *testi
 	if old.Value == cookie.Value || !adminSessionIDPattern.MatchString(cookie.Value) || !cookie.HttpOnly || len(manager.destroyed) != 1 || service.invalidations != 1 || strings.Contains(response.Body.String(), cookie.Value) {
 		t.Fatalf("session was not securely rotated: old=%s new=%s destroyed=%v", old.Value, cookie.Value, manager.destroyed)
 	}
-	if got := adminRequest(h, http.MethodGet, "/admin/main-menu", "", cookie, ""); got.Code != 200 {
-		t.Fatalf("authenticated shell read: %d %s", got.Code, got.Body)
+	if got := adminRequest(h, http.MethodGet, "/admin/main-menu", "", cookie, ""); got.Code != http.StatusOK || len(got.Result().Cookies()) != 0 {
+		t.Fatalf("authenticated shell read must succeed without reissuing its cookie: %d %s", got.Code, got.Body)
 	}
 	replay := adminRequest(h, http.MethodGet, "/admin/session?success=true&role=admin", "", old, "")
 	var value adminauth.Response

@@ -119,8 +119,10 @@ func (s *AdminSessions) Resolver(w http.ResponseWriter, r *http.Request) (sessio
 		if err = stored.Flush(); err != nil {
 			return nil, err
 		}
+		// Existing cookies already expire at the fixed session deadline. Only
+		// send a new cookie when creating or replacing a session.
+		s.cookie(w, id, created)
 	}
-	s.cookie(w, id, created)
 	return &adminSessionStore{Session: stored}, nil
 }
 
@@ -137,14 +139,12 @@ func (s *AdminSessions) End(w http.ResponseWriter, _ *http.Request, sess session
 	if s == nil {
 		return errors.New("administrator session manager is not configured")
 	}
+	http.SetCookie(w, &http.Cookie{Name: s.config.CookieName, Value: "", Path: s.cookiePath, Domain: s.config.CookieDomain, Secure: s.config.Secure, HttpOnly: true, SameSite: s.config.SameSite, MaxAge: -1, Expires: time.Unix(1, 0)})
 	if sess != nil && adminSessionIDPattern.MatchString(sess.SessionID()) {
-		if err := s.manager.SessionDestroy(sess.SessionID()); err != nil {
-			return err
-		}
 		if stored, ok := sess.(*adminSessionStore); ok {
 			stored.destroyed = true
 		}
+		return s.manager.SessionDestroy(sess.SessionID())
 	}
-	http.SetCookie(w, &http.Cookie{Name: s.config.CookieName, Value: "", Path: s.cookiePath, Domain: s.config.CookieDomain, Secure: s.config.Secure, HttpOnly: true, SameSite: s.config.SameSite, MaxAge: -1, Expires: time.Unix(1, 0)})
 	return nil
 }

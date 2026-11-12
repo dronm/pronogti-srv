@@ -19,6 +19,13 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+const (
+	PWD_MIN_LEN = 6
+	PWD_MAX_LEN = 72
+)
+
+var errInvalidPassword = fmt.Errorf("password must be valid UTF-8, contain at least %d characters, and fit within %d bytes", PWD_MIN_LEN, PWD_MAX_LEN)
+
 type identity struct {
 	UserID         int64     `json:"user_id"`
 	SessionVersion int64     `json:"session_version"`
@@ -40,7 +47,7 @@ func NewService(repository Repository, options Options) *Service {
 		options.MaxLifeTime = 8 * time.Hour
 	}
 	if options.BcryptCost < bcrypt.MinCost || options.BcryptCost > bcrypt.MaxCost {
-		options.BcryptCost = 12
+		options.BcryptCost = PWD_MIN_LEN
 	}
 	// This is not an account password. It equalizes the expensive comparison for
 	// nonexistent, disabled and non-administrator accounts.
@@ -83,8 +90,10 @@ func (s *Service) Login(ctx context.Context, sess session.Session, credentials C
 	if err != nil {
 		return Response{}, fmt.Errorf("record administrator login: %w", err)
 	}
-	value := identity{UserID: account.ID, SessionVersion: account.SessionVersion, LoginID: loginID, Nonce: nonce,
-		ExpiresAt: s.now().UTC().Add(s.options.MaxLifeTime), SessionHash: sessionHash}
+	value := identity{
+		UserID: account.ID, SessionVersion: account.SessionVersion, LoginID: loginID, Nonce: nonce,
+		ExpiresAt: s.now().UTC().Add(s.options.MaxLifeTime), SessionHash: sessionHash,
+	}
 	if err = sess.Set(SessionKey, value); err == nil {
 		err = sess.Flush()
 	}
@@ -111,17 +120,50 @@ func (s *Service) Current(ctx context.Context, sess session.Session) (Response, 
 }
 
 func (s *Service) Require(ctx context.Context, sess session.Session, nonce string) (User, error) {
+	account, _, err := s.require(ctx, sess, nonce)
+	return account.User, err
+}
+
+func (s *Service) require(ctx context.Context, sess session.Session, nonce string) (Account, identity, error) {
 	account, value, err := s.current(ctx, sess)
 	if errors.Is(err, ErrNotFound) {
-		return User{}, sessionRequired()
+		return Account{}, identity{}, sessionRequired()
 	}
 	if err != nil {
-		return User{}, err
+		return Account{}, identity{}, err
 	}
 	if nonce == "" || subtle.ConstantTimeCompare([]byte(value.Nonce), []byte(nonce)) != 1 {
-		return User{}, webapp.Forbidden("administrator session nonce is required", map[string]any{"code": "admin_session_nonce_required"})
+		return Account{}, identity{}, webapp.Forbidden("administrator session nonce is required", map[string]any{"code": "admin_session_nonce_required"})
 	}
-	return account.User, nil
+	return account, value, nil
+}
+
+func (s *Service) ChangePassword(ctx context.Context, sess session.Session, nonce string, change PasswordChange) error {
+	account, value, err := s.require(ctx, sess, nonce)
+	if err != nil {
+		return err
+	}
+	if change.NewPassword != change.ConfirmPassword {
+		return webapp.BadRequest("password confirmation does not match", map[string]any{"code": "admin_password_mismatch"})
+	}
+	hash, err := HashPassword(change.NewPassword)
+	if errors.Is(err, errInvalidPassword) {
+		return webapp.BadRequest(err.Error(), map[string]any{"code": "admin_password_invalid"})
+	}
+	if err != nil {
+		return fmt.Errorf("hash administrator password: %w", err)
+	}
+	if !s.now().Before(value.ExpiresAt) {
+		return sessionRequired()
+	}
+	err = s.repository.ChangePassword(ctx, account, value.LoginID, value.SessionHash, hash)
+	if errors.Is(err, ErrCredentials) {
+		return sessionRequired()
+	}
+	if err != nil {
+		return fmt.Errorf("change administrator password: %w", err)
+	}
+	return nil
 }
 
 func (s *Service) Logout(ctx context.Context, sess session.Session, nonce string) error {
@@ -229,9 +271,9 @@ func sessionRequired() error {
 // HashPassword accepts the full UTF-8 password without trimming it. Bcrypt's
 // byte limit is explicit to avoid silently treating different passwords alike.
 func HashPassword(password string) (string, error) {
-	if len(password) < 12 || len(password) > 72 || !utf8.ValidString(password) {
-		return "", errors.New("password must contain between 12 and 72 UTF-8 bytes")
+	if len(password) > PWD_MAX_LEN || !utf8.ValidString(password) || utf8.RuneCountInString(password) < PWD_MIN_LEN {
+		return "", errInvalidPassword
 	}
-	hash, err := bcrypt.GenerateFromPassword([]byte(password), 12)
+	hash, err := bcrypt.GenerateFromPassword([]byte(password), PWD_MIN_LEN)
 	return string(hash), err
 }

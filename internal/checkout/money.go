@@ -44,6 +44,12 @@ func QuantityFromFloat(value float64) (string, error) {
 	return canonical, err
 }
 
+// ParseQuantity returns the canonical checkout quantity and its exact
+// representation in thousandths of a unit.
+func ParseQuantity(value string) (string, int64, error) {
+	return normalizeQuantity(value)
+}
+
 func normalizeQuantity(value string) (string, int64, error) {
 	milli, err := parseScaled(value, 3, maxQuantityMilli)
 	if err != nil || milli <= 0 {

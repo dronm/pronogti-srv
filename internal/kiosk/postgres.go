@@ -34,14 +34,14 @@ func (r *PostgresRegistry) FindByToken(ctx context.Context, token string) (Kiosk
 	if token == "" || len(token) > 512 {
 		return Kiosk{}, ErrKioskNotFound
 	}
-	return r.find(ctx, `SELECT id, name, company_id, is_active, session_version FROM public.kiosks WHERE token_hash=$1`, HashToken(token))
+	return r.find(ctx, `SELECT id, name, company_id, is_active, session_version FROM public.kiosks WHERE token_hash=$1 AND archived_at IS NULL`, HashToken(token))
 }
 
 func (r *PostgresRegistry) FindByID(ctx context.Context, id int64) (Kiosk, error) {
 	if id <= 0 {
 		return Kiosk{}, ErrKioskNotFound
 	}
-	return r.find(ctx, `SELECT id, name, company_id, is_active, session_version FROM public.kiosks WHERE id=$1`, id)
+	return r.find(ctx, `SELECT id, name, company_id, is_active, session_version FROM public.kiosks WHERE id=$1 AND archived_at IS NULL`, id)
 }
 
 func (r *PostgresRegistry) find(ctx context.Context, sql string, args ...any) (Kiosk, error) {
@@ -89,7 +89,7 @@ func (r *PostgresRegistry) Rotate(ctx context.Context, id int64) (string, error)
 	if err != nil {
 		return "", err
 	}
-	_, err = r.find(ctx, `UPDATE public.kiosks SET token_hash=$2 WHERE id=$1 RETURNING id,name,company_id,is_active,session_version`, id, HashToken(token))
+	_, err = r.find(ctx, `UPDATE public.kiosks SET token_hash=$2 WHERE id=$1 AND archived_at IS NULL RETURNING id,name,company_id,is_active,session_version`, id, HashToken(token))
 	if err != nil {
 		return "", err
 	}
@@ -100,6 +100,20 @@ func (r *PostgresRegistry) SetActive(ctx context.Context, id int64, active bool)
 	if id <= 0 {
 		return errors.New("positive kiosk ID is required")
 	}
-	_, err := r.find(ctx, `UPDATE public.kiosks SET is_active=$2 WHERE id=$1 RETURNING id,name,company_id,is_active,session_version`, id, active)
+	_, err := r.find(ctx, `UPDATE public.kiosks SET is_active=$2 WHERE id=$1 AND archived_at IS NULL RETURNING id,name,company_id,is_active,session_version`, id, active)
+	return err
+}
+
+// Archive removes the device from service while retaining the ID used by orders.
+func (r *PostgresRegistry) Archive(ctx context.Context, id int64) error {
+	if id <= 0 {
+		return ErrKioskNotFound
+	}
+	token, err := GenerateToken()
+	if err != nil {
+		return err
+	}
+	_, err = r.find(ctx, `UPDATE public.kiosks SET archived_at=now(), is_active=false, token_hash=$2
+		WHERE id=$1 AND archived_at IS NULL RETURNING id,name,company_id,is_active,session_version`, id, HashToken(token))
 	return err
 }

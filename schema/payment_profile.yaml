@@ -1,0 +1,352 @@
+name: PaymentProfile
+comment: Bank acquiring settings owned by a salon.
+humanName: payment profile
+humanNamePlural: payment profiles
+
+enums:
+  - name: payment_profile_environment
+    goType: PaymentProfileEnvironment
+    sqlType: text
+    frontendName: PaymentProfileEnvironment
+    values:
+      - value: mock
+        label: Имитация
+      - value: sandbox
+        label: Песочница
+      - value: production
+        label: Рабочая среда
+
+table:
+  schema: public
+  name: payment_profiles
+
+route: /admin/payment-profiles
+permissionPrefix: paymentProfile
+serviceName: PaymentProfile
+sessionRequired: true
+crudNotifications: false
+service:
+  manualMethods: [create, update, delete]
+
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+
+# The admin service validates connection settings and manages credentials
+# separately from the generated profile model.
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    serverGenerated: true
+
+  - name: company_id
+    type: bigint
+    required: true
+    references:
+      schema: public
+      table: salons
+      column: company_id
+
+  - name: name
+    type: text
+    required: true
+    maxLen: 200
+    check: length(btrim(name)) BETWEEN 1 AND 200
+
+  - name: provider
+    type: text
+    required: true
+    serverGenerated: true
+    default: "'tochka'"
+
+  - name: environment
+    type: enum
+    enum: payment_profile_environment
+    required: true
+    default: "'mock'"
+
+  - name: api_base_url
+    type: text
+    required: true
+
+  - name: jwt_env
+    type: text
+    nullable: true
+    serverGenerated: true
+    comment: Legacy deployment environment variable name for the JWT.
+
+  - name: client_id
+    type: text
+    nullable: true
+
+  - name: customer_code
+    type: text
+    nullable: true
+
+  - name: sbp_merchant_id
+    type: text
+    nullable: true
+
+  - name: account_id
+    type: text
+    nullable: true
+
+  - name: qr_ttl_minutes
+    type: int
+    required: true
+    default: "15"
+    check: qr_ttl_minutes BETWEEN 1 AND 129600
+
+  - name: http_timeout_seconds
+    type: int
+    required: true
+    default: "20"
+    check: http_timeout_seconds BETWEEN 1 AND 300
+
+  - name: enabled
+    type: bool
+    required: true
+    default: "false"
+
+  - name: cards_enabled
+    type: bool
+    required: true
+    default: "false"
+    comment: The existing database constraint requires an acquiring merchant ID when enabled.
+
+  - name: acquiring_merchant_id
+    type: text
+    nullable: true
+
+  - name: card_ttl_minutes
+    type: int
+    required: true
+    default: "15"
+    check: card_ttl_minutes BETWEEN 1 AND 44640
+
+  - name: card_redirect_url
+    type: text
+    nullable: true
+    maxLen: 2083
+
+  - name: card_fail_redirect_url
+    type: text
+    nullable: true
+    maxLen: 2083
+
+  - name: config_version
+    type: bigint
+    dbRequired: true
+    serverGenerated: true
+    default: "1"
+
+  - name: created_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+list:
+  model: PaymentProfileList
+  table:
+    schema: public
+    name: payment_profiles_list
+  fields:
+    - name: id
+      type: bigint
+      primaryKey: true
+    - name: company_id
+      type: bigint
+    - name: company
+      type: json
+    - name: name
+      type: text
+    - name: provider
+      type: text
+    - name: environment
+      type: enum
+      enum: payment_profile_environment
+    - name: api_base_url
+      type: text
+    - name: jwt_env
+      type: text
+      nullable: true
+    - name: client_id
+      type: text
+      nullable: true
+    - name: customer_code
+      type: text
+      nullable: true
+    - name: sbp_merchant_id
+      type: text
+      nullable: true
+    - name: account_id
+      type: text
+      nullable: true
+    - name: qr_ttl_minutes
+      type: int
+    - name: http_timeout_seconds
+      type: int
+    - name: enabled
+      type: bool
+    - name: cards_enabled
+      type: bool
+    - name: acquiring_merchant_id
+      type: text
+      nullable: true
+    - name: card_ttl_minutes
+      type: int
+    - name: card_redirect_url
+      type: text
+      nullable: true
+    - name: card_fail_redirect_url
+      type: text
+      nullable: true
+    - name: config_version
+      type: bigint
+    - name: created_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: true
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание платёжного профиля
+    list: Просмотр платёжных профилей
+    detail: Просмотр платёжного профиля
+    update: Изменение платёжного профиля
+    delete: Удаление платёжного профиля
+
+applicationRoute:
+  enabled: true
+  name: paymentProfiles
+  path: /admin/payment-profiles
+  description: Платёжные профили
+  section: Справочники
+  icon: pi pi-payment_profiles
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Платёжные профили
+  form:
+    enabled: true
+    columns: 2
+    createTitle: Новый платёжный профиль
+    editTitle: Платёжный профиль
+    fields:
+      - field: id
+        label: ID
+        readOnly: true
+      - field: company_id
+        label: Компания
+      - field: name
+        label: Наименование
+        component: text
+        autofocus: true
+      - field: provider
+        label: Банк
+        component: text
+        readOnly: true
+        default: tochka
+      - field: environment
+        label: Среда
+      - field: api_base_url
+        label: URL API Точки
+        component: text
+        default: http://127.0.0.1:8099
+      - field: client_id
+        label: Идентификатор клиента API
+        component: text
+      - field: customer_code
+        label: Код компании в Точке
+        component: text
+      - field: sbp_merchant_id
+        label: ТСП СБП
+        component: text
+      - field: account_id
+        label: Номер счёта
+        component: text
+      - field: qr_ttl_minutes
+        label: Срок QR, мин.
+        default: 15
+      - field: http_timeout_seconds
+        label: Тайм-аут HTTP, сек.
+        default: 20
+      - field: enabled
+        label: Активен
+      - field: cards_enabled
+        label: Оплата картой
+      - field: acquiring_merchant_id
+        label: ТСП эквайринга
+        component: text
+      - field: card_ttl_minutes
+        label: Срок оплаты картой, мин.
+        default: 15
+      - field: card_redirect_url
+        label: URL после оплаты картой
+        component: text
+      - field: card_fail_redirect_url
+        label: URL при ошибке оплаты картой
+        component: text
+      - field: config_version
+        label: Версия настроек
+        readOnly: true
+      - field: created_at
+        label: Создан
+        readOnly: true
+      - field: updated_at
+        label: Изменён
+        readOnly: true
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: name
+        label: Наименование
+        width: 20rem
+      - field: company_id
+        label: Компания
+        reference:
+          name: companyReference
+          import: "@/references/catalogueReferences"
+          field: company
+        sortField: "company->>'descr'"
+      - field: environment
+        label: Среда
+        width: 12rem
+      - field: enabled
+        label: Активен
+      - field: cards_enabled
+        label: Оплата картой
+  routes:
+    listName: paymentProfiles
+    createName: paymentProfileCreate
+    editName: paymentProfileEdit
+
+# The table and validation triggers already exist. A separate migration
+# creates the list projection over the existing configuration.
+migration:
+  enabled: false
+
+test:
+  enabled: false

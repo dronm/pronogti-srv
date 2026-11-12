@@ -25,7 +25,8 @@ go run ./cmd/admin -config ./config.json create -name admin -password-env PRONOG
 unset PRONOGTI_ADMIN_PASSWORD
 ```
 
-Passwords must contain 12–72 UTF-8 bytes. Alternatively, omit `-password-env`
+Passwords must contain at least 6 characters and fit within 72 UTF-8 bytes.
+Alternatively, omit `-password-env`
 and supply the password on standard input. For an existing administrator, use
 `reset-password` in place of `create`. A reset revokes existing administrator
 sessions and preserves a blocked account's blocked state. A client account is
@@ -81,6 +82,7 @@ administrator sessions still use that library through `webapp/session`.
 | --- | --- | --- |
 | POST | `/admin/login` | JSON `{ "name": "admin", "pwd": "..." }`; rotate the session ID and authenticate an active administrator |
 | GET | `/admin/session` | Restore the authenticated identity, or return `{ "auth": null, "user": null }` |
+| POST | `/admin/profile/password` | JSON `{ "new_password": "...", "confirm_password": "..." }` plus `X-Admin-Session`. Update the signed-in administrator's password and revoke all their sessions |
 | POST | `/admin/logout` | JSON `{}` plus `X-Admin-Session`; revoke the audit record, destroy Redis state and clear the cookie |
 | GET | `/admin/main-menu` | Current administrator's saved menu tree; alias of `/admin/main-menus/for-user` |
 | GET, POST | `/admin/main-menus` | List or create menu entries |
@@ -103,6 +105,9 @@ Unsafe authenticated requests send the nonce in `X-Admin-Session`. Requests use
 cookies with `credentials: include`. Authenticated GET endpoints validate the
 cookie against fresh database role, blocked-state, session-version and open
 login evidence.
+
+The profile form requires matching new password fields. After a successful
+password change, the administrator signs in again with the new password.
 
 The admin HTTP stack is separate from public salon/customer and persistent kiosk
 session middleware. A customer phone number or kiosk credential cannot grant

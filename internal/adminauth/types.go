@@ -23,6 +23,11 @@ type Credentials struct {
 	Pwd  string `json:"pwd"`
 }
 
+type PasswordChange struct {
+	NewPassword     string `json:"new_password"`
+	ConfirmPassword string `json:"confirm_password"`
+}
+
 type User struct {
 	ID       int64  `json:"id"`
 	Name     string `json:"name"`
@@ -59,6 +64,7 @@ type Repository interface {
 	OpenLogin(context.Context, Account, string, RequestInfo) (int64, error)
 	CurrentAccount(context.Context, int64, int64, string) (Account, error)
 	CloseLogin(context.Context, int64, int64, string) error
+	ChangePassword(ctx context.Context, expected Account, loginID int64, sessionHash, passwordHash string) error
 }
 
 type Options struct {

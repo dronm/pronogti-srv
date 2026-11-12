@@ -45,3 +45,13 @@ func TestCompletionConfigurationRejectsInvalidIntervalsAndWebhookKeys(t *testing
 		}
 	}
 }
+
+func TestWebhookConfigurationAllowsAConfigKeyWithoutAnEnvironmentVariable(t *testing.T) {
+	c := defaultConfig().Payments
+	c.WebhookEnabled = true
+	c.WebhookPublicKeyEnv = ""
+	c.WebhookPublicKey = "test public key"
+	if err := c.Validate(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -1,0 +1,151 @@
+name: PaymentAttempt
+comment: Read-only administrator projection.
+table:
+  schema: public
+  name: admin_payments
+route: /admin/payment-attempts
+permissionPrefix: paymentAttempt
+serviceName: AdminPaymentAttempt
+sessionRequired: true
+crudNotifications: false
+keys:
+  - name: id
+    pathName: id
+    type: text
+fields:
+  - name: id
+    type: text
+    primaryKey: true
+  - name: order_id
+    type: text
+  - name: company_id
+    type: bigint
+  - name: payment_profile_id
+    type: bigint
+  - name: salon_name
+    type: text
+  - name: profile_name
+    type: text
+  - name: environment
+    type: text
+  - name: method
+    type: text
+  - name: state
+    type: text
+  - name: currency
+    type: text
+  - name: amount_kopecks
+    type: bigint
+  - name: created_at
+    type: timestamptz
+  - name: updated_at
+    type: timestamptz
+  - name: paid_at
+    type: timestamptz
+    nullable: true
+  - name: expires_at
+    type: timestamptz
+    nullable: true
+  - name: last_checked_at
+    type: timestamptz
+    nullable: true
+  - name: next_check_at
+    type: timestamptz
+    nullable: true
+  - name: qrc_id
+    type: text
+    nullable: true
+  - name: acquiring_operation_id
+    type: text
+    nullable: true
+  - name: bank_status
+    type: text
+    nullable: true
+  - name: transaction_id
+    type: text
+    nullable: true
+  - name: ref_transaction_id
+    type: text
+    nullable: true
+  - name: bank_reference
+    type: text
+    nullable: true
+  - name: error_code
+    type: text
+    nullable: true
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: true
+  name: paymentAttempts
+  path: /admin/payment-attempts
+  description: Попытки оплаты
+  section: Платежи
+  icon: pi pi-credit-card
+  menuAvailable: true
+frontend:
+  scaffold: true
+  title: Попытки оплаты
+  form:
+    enabled: false
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: created_at
+        label: Создана
+        width: 11rem
+      - field: order_id
+        label: Заказ
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: id
+        label: Оплата
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: salon_name
+        label: Салон
+        width: 12rem
+      - field: method
+        label: Способ
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: environment
+        label: Среда
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: amount_kopecks
+        label: Сумма
+        width: 8rem
+        searchable: false
+      - field: state
+        label: Статус
+        width: 10rem
+        searchOperations:
+          - exact
+      - field: bank_reference
+        label: Номер операции
+        width: 14rem
+        searchOperations:
+          - exact
+      - field: paid_at
+        label: Оплачена
+        width: 11rem
+  routes:
+    listName: paymentAttempts
+migration:
+  enabled: false
+test:
+  enabled: false

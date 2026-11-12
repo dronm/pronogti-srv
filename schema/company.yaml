@@ -1,0 +1,114 @@
+name: Company
+comment: Local directory of YClients companies. The primary key is the YClients company ID.
+humanName: company
+humanNamePlural: companies
+
+table:
+  schema: public
+  name: companies
+  checks:
+    - id > 0
+    - length(btrim(name)) BETWEEN 1 AND 200
+
+route: /admin/companies
+permissionPrefix: company
+serviceName: Company
+sessionRequired: true
+crudNotifications: false
+
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: false
+    serverGenerated: false
+    required: true
+    dbRequired: true
+    check: id > 0
+    comment: Enter the existing YClients company ID. Existing company_id values use this same ID.
+
+  - name: name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 200
+    check: length(btrim(name)) BETWEEN 1 AND 200
+    comment: Company name displayed in administrator selectors; it can differ from the public salon name.
+
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: false
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание компании
+    list: Просмотр списка компаний
+    detail: Просмотр компании
+    update: Изменение компании
+
+applicationRoute:
+  enabled: true
+  name: companies
+  path: /admin/companies
+  description: Компании YClients
+  section: Справочники
+  icon: pi pi-building
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Компании YClients
+  form:
+    enabled: true
+    columns: 2
+    createTitle: Новая компания
+    editTitle: Компания
+    copyTitle: Копия компании
+    fields:
+      - field: id
+        label: ID компании YClients
+        component: number
+        autofocus: true
+
+      - field: name
+        label: Наименование
+        component: text
+
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: id
+        label: ID компании YClients
+        width: 12rem
+      - field: name
+        label: Наименование
+        width: 32rem
+
+  routes:
+    listName: companies
+    createName: companyCreate
+    editName: companyEdit
+
+# The accompanying migration creates this table and seeds existing salon IDs.
+# Pronogti authorizes compiled administrator routes and has no permissions or
+# role_permissions tables for the generator's default SQL permission seeds.
+migration:
+  enabled: false
+
+# Existing foreign keys continue to reference salons(company_id). Selecting a
+# company for a salon-scoped setting still requires its configured salon row.
+# Consumer dropdowns display name and save id in their existing company_id field.
+test:
+  enabled: false

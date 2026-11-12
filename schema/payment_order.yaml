@@ -1,0 +1,228 @@
+name: PaymentOrder
+comment: Read-only administrator projection.
+table:
+  schema: public
+  name: admin_payment_orders_list
+route: /admin/payment-orders
+permissionPrefix: paymentOrder
+serviceName: AdminPaymentOrder
+sessionRequired: true
+crudNotifications: false
+keys:
+  - name: id
+    pathName: id
+    type: text
+fields:
+  - name: id
+    type: text
+    primaryKey: true
+  - name: company_id
+    type: bigint
+  - name: salon_name
+    type: text
+  - name: kiosk_id
+    type: bigint
+    nullable: true
+  - name: kiosk_name
+    type: text
+    nullable: true
+  - name: entry_mode
+    type: text
+  - name: payable_kopecks
+    type: bigint
+  - name: currency
+    type: text
+  - name: state
+    type: text
+  - name: created_at
+    type: timestamptz
+  - name: payment_id
+    type: text
+    nullable: true
+  - name: payment_method
+    type: text
+    nullable: true
+  - name: payment_state
+    type: text
+    nullable: true
+  - name: environment
+    type: text
+    nullable: true
+  - name: paid_at
+    type: timestamptz
+    nullable: true
+  - name: bank_reference
+    type: text
+    nullable: true
+  - name: yclients_sync_status
+    type: text
+  - name: fiscal_status
+    type: text
+detail:
+  model: PaymentOrderDetail
+  table:
+    schema: public
+    name: admin_payment_orders_detail
+  fields:
+    - name: id
+      type: text
+      primaryKey: true
+    - name: company_id
+      type: bigint
+    - name: salon_name
+      type: text
+    - name: kiosk_id
+      type: bigint
+      nullable: true
+    - name: kiosk_name
+      type: text
+      nullable: true
+    - name: entry_mode
+      type: text
+    - name: payable_kopecks
+      type: bigint
+    - name: currency
+      type: text
+    - name: state
+      type: text
+    - name: created_at
+      type: timestamptz
+    - name: payment_id
+      type: text
+      nullable: true
+    - name: payment_method
+      type: text
+      nullable: true
+    - name: payment_state
+      type: text
+      nullable: true
+    - name: environment
+      type: text
+      nullable: true
+    - name: paid_at
+      type: timestamptz
+      nullable: true
+    - name: bank_reference
+      type: text
+      nullable: true
+    - name: yclients_sync_status
+      type: text
+    - name: fiscal_status
+      type: text
+    - name: client_id
+      type: bigint
+      nullable: true
+    - name: visit_id
+      type: bigint
+      nullable: true
+    - name: record_id
+      type: bigint
+      nullable: true
+    - name: items_snapshot
+      type: jsonb
+      goType: '[]map[string]any'
+      tsType: Record<string, unknown>[]
+      tsDtoType: Record<string, unknown>[]
+      valibot: v.array(AttrsSchema)
+    - name: subtotal_kopecks
+      type: bigint
+    - name: bonus_kopecks
+      type: bigint
+    - name: expires_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+    - name: yclients_error_code
+      type: text
+      nullable: true
+    - name: fiscal_error_code
+      type: text
+      nullable: true
+    - name: yclients_completed_at
+      type: timestamptz
+      nullable: true
+    - name: fiscal_completed_at
+      type: timestamptz
+      nullable: true
+    - name: yclients_document_ids
+      type: text
+      nullable: true
+    - name: fiscal_document_number
+      type: text
+      nullable: true
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: true
+  name: paymentOrders
+  path: /admin/payment-orders
+  description: Заказы на оплату
+  section: Платежи
+  icon: pi pi-list
+  menuAvailable: true
+frontend:
+  scaffold: true
+  title: Заказы на оплату
+  form:
+    enabled: false
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: created_at
+        label: Создан
+        width: 11rem
+      - field: id
+        label: Номер заказа
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: salon_name
+        label: Салон
+        width: 12rem
+      - field: kiosk_name
+        label: Источник
+        width: 10rem
+      - field: payable_kopecks
+        label: К оплате
+        width: 8rem
+        searchable: false
+      - field: state
+        label: Статус заказа
+        width: 9rem
+        searchOperations:
+          - exact
+      - field: payment_state
+        label: Оплата
+        width: 9rem
+        searchOperations:
+          - exact
+      - field: environment
+        label: Среда
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: yclients_sync_status
+        label: YClients
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: fiscal_status
+        label: Чек
+        width: 8rem
+        searchOperations:
+          - exact
+  routes:
+    listName: paymentOrders
+migration:
+  enabled: false
+test:
+  enabled: false

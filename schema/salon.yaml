@@ -82,7 +82,7 @@ fields:
     default: now()
 
   # The existing composite foreign keys also enforce company ownership.
-  # Keep these nullable scalar IDs until profile reference components are added.
+  # The edit form displays the detail projection and submits these nullable IDs.
   - name: default_payment_profile_id
     type: bigint
     nullable: true
@@ -106,6 +106,55 @@ fields:
       schema: public
       table: yclients_profiles
       column: id
+
+detail:
+  model: SalonDetail
+  table:
+    schema: public
+    name: salons_detail
+  fields:
+    - name: company_id
+      type: bigint
+      primaryKey: true
+      required: true
+    - name: slug
+      type: text
+      required: true
+    - name: name
+      type: text
+      required: true
+    - name: is_active
+      type: bool
+      required: true
+    - name: session_version
+      type: bigint
+    - name: sort_order
+      type: int
+      required: true
+    - name: created_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+    - name: default_payment_profile_id
+      type: bigint
+      nullable: true
+    - name: default_fiscal_profile_id
+      type: bigint
+      nullable: true
+    - name: default_yclients_profile_id
+      type: bigint
+      nullable: true
+    - name: company
+      type: json
+    - name: default_payment_profile
+      type: json
+      nullable: true
+    - name: default_fiscal_profile
+      type: json
+      nullable: true
+    - name: default_yclients_profile
+      type: json
+      nullable: true
 
 crud:
   create: true
@@ -136,6 +185,7 @@ applicationRoute:
 frontend:
   scaffold: true
   title: Салоны
+  # The handwritten SalonForm.vue renders the reference controls.
   form:
     enabled: true
     columns: 2

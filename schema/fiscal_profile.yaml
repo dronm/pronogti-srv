@@ -1,0 +1,385 @@
+name: FiscalProfile
+comment: Company-owned Terminal FA receipt settings.
+humanName: fiscal profile
+humanNamePlural: fiscal profiles
+
+enums:
+  - name: catalogue_execution_mode
+    goType: CatalogueExecutionMode
+    sqlType: text
+    frontendName: CatalogueExecutionMode
+    values:
+      - value: demo
+        label: Демо
+      - value: live
+        label: Рабочий
+
+table:
+  schema: public
+  name: fiscal_profiles
+
+route: /admin/fiscal-profiles
+permissionPrefix: fiscalProfile
+serviceName: FiscalProfile
+sessionRequired: true
+crudNotifications: false
+service:
+  manualMethods: [create, update]
+
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    serverGenerated: true
+
+  - name: company_id
+    type: bigint
+    required: true
+    dbRequired: true
+    references:
+      schema: public
+      table: salons
+      column: company_id
+
+  - name: name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 200
+
+  - name: enabled
+    type: bool
+    required: true
+    dbRequired: true
+    default: "true"
+
+  - name: mode
+    type: enum
+    enum: catalogue_execution_mode
+    required: true
+    dbRequired: true
+    default: "'demo'"
+
+  - name: driver_base_url
+    type: text
+    nullable: true
+    comment: Approved TerminalFA HTTP service base URL.
+
+  - name: device_id
+    type: text
+    nullable: true
+    maxLen: 128
+
+  - name: bearer_token_env
+    type: text
+    nullable: true
+    comment: Name of the approved token environment variable for this TerminalFA endpoint.
+
+  - name: timeout_seconds
+    type: int
+    required: true
+    dbRequired: true
+    default: "100"
+    check: timeout_seconds BETWEEN 1 AND 300
+    comment: Timeout of the HTTP request to TerminalFA, in seconds.
+    valibot: 'v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(300, "Укажите целое число секунд от 1 до 300."))'
+
+  - name: cashier_name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 64
+    default: "'Cashier'"
+
+  - name: cashier_inn
+    type: text
+    nullable: true
+    maxLen: 12
+
+  - name: tax_system
+    type: int
+    required: true
+    dbRequired: true
+    default: "1"
+    check: tax_system IN (1, 2, 4, 16, 32)
+    comment: TerminalFA numeric taxation system code.
+    valibot: 'v.picklist(fiscalTaxSystemOptions.map(({ value }) => value), "Выберите систему налогообложения.")'
+
+  - name: service_vat_rate
+    type: int
+    required: true
+    dbRequired: true
+    default: "6"
+    check: service_vat_rate BETWEEN 1 AND 12
+    comment: TerminalFA numeric VAT code for services.
+    valibot: 'v.picklist(fiscalVatOptions.map(({ value }) => value), "Выберите ставку НДС.")'
+
+  - name: good_vat_rate
+    type: int
+    required: true
+    dbRequired: true
+    default: "6"
+    check: good_vat_rate BETWEEN 1 AND 12
+    comment: TerminalFA numeric VAT code for goods.
+    valibot: 'v.picklist(fiscalVatOptions.map(({ value }) => value), "Выберите ставку НДС.")'
+
+  - name: payment_method
+    type: int
+    required: true
+    dbRequired: true
+    default: "4"
+    check: payment_method BETWEEN 1 AND 7
+    comment: TerminalFA numeric settlement method code (FFD tag 1214).
+    valibot: 'v.picklist(fiscalPaymentMethodOptions.map(({ value }) => value), "Выберите признак способа расчёта.")'
+
+  - name: settlement_address
+    type: text
+    nullable: true
+
+  - name: settlement_place
+    type: text
+    nullable: true
+
+  - name: internet_payment
+    type: bool
+    required: true
+    dbRequired: true
+    default: "false"
+
+  - name: suppress_print
+    type: bool
+    required: true
+    dbRequired: true
+    default: "false"
+
+  - name: created_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    dbRequired: true
+    serverGenerated: true
+    default: now()
+
+list:
+  model: FiscalProfileList
+  table:
+    schema: public
+    name: fiscal_profiles_list
+  fields:
+    - name: id
+      type: bigint
+      primaryKey: true
+    - name: company_id
+      type: bigint
+      required: true
+    - name: name
+      type: text
+      required: true
+    - name: enabled
+      type: bool
+      required: true
+      default: "true"
+    - name: mode
+      type: enum
+      enum: catalogue_execution_mode
+      required: true
+    - name: driver_base_url
+      type: text
+      nullable: true
+    - name: device_id
+      type: text
+      nullable: true
+    - name: bearer_token_env
+      type: text
+      nullable: true
+    - name: timeout_seconds
+      type: int
+      required: true
+      default: "100"
+    - name: cashier_name
+      type: text
+      required: true
+      default: "'Cashier'"
+    - name: cashier_inn
+      type: text
+      nullable: true
+    - name: tax_system
+      type: int
+      required: true
+      default: "1"
+    - name: service_vat_rate
+      type: int
+      required: true
+      default: "6"
+    - name: good_vat_rate
+      type: int
+      required: true
+      default: "6"
+    - name: payment_method
+      type: int
+      required: true
+      default: "4"
+    - name: settlement_address
+      type: text
+      nullable: true
+    - name: settlement_place
+      type: text
+      nullable: true
+    - name: internet_payment
+      type: bool
+      required: true
+      default: "false"
+    - name: suppress_print
+      type: bool
+      required: true
+      default: "false"
+    - name: created_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+    - name: company
+      type: json
+      nullable: true
+
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: false
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание фискального профиля
+    list: Просмотр списка фискальных профилей
+    detail: Просмотр фискального профиля
+    update: Изменение фискального профиля
+
+applicationRoute:
+  enabled: true
+  name: fiscalProfiles
+  path: /admin/fiscal-profiles
+  description: Фискальные профили
+  section: Справочники
+  icon: pi pi-fiscal_profiles
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Фискальные профили
+  schemaImports:
+    - from: "@/forms/fiscalProfileOptions"
+      names: [fiscalTaxSystemOptions, fiscalVatOptions, fiscalPaymentMethodOptions]
+  # FiscalProfileForm.vue renders the company reference and the numeric selects.
+  form:
+    enabled: true
+    columns: 2
+    createTitle: Новый фискальный профиль
+    editTitle: Фискальный профиль
+    copyTitle: Копия фискального профиля
+    fields:
+      - field: id
+        label: ID
+        readOnly: true
+      - field: company_id
+        label: Компания
+      - field: name
+        label: Наименование
+        component: text
+        autofocus: true
+      - field: enabled
+        label: Активен
+        default: true
+      - field: mode
+        label: Режим
+      - field: driver_base_url
+        label: Адрес сервиса ККТ
+        component: text
+      - field: bearer_token_env
+        label: Переменная окружения для токена ККТ
+        component: text
+      - field: device_id
+        label: Устройство ККТ
+        component: text
+      - field: timeout_seconds
+        label: Тайм-аут, с
+        default: 100
+      - field: cashier_name
+        label: Кассир
+        component: text
+        default: Cashier
+      - field: cashier_inn
+        label: ИНН кассира
+        component: text
+      - field: tax_system
+        label: Система налогообложения
+        default: 1
+      - field: service_vat_rate
+        label: НДС услуг
+        default: 6
+      - field: good_vat_rate
+        label: НДС товаров
+        default: 6
+      - field: payment_method
+        label: Признак способа расчёта
+        default: 4
+      - field: settlement_address
+        label: Адрес расчётов
+        component: text
+      - field: settlement_place
+        label: Место расчётов
+        component: text
+      - field: internet_payment
+        label: Расчёт в интернете
+      - field: suppress_print
+        label: Без печати
+      - field: created_at
+        label: Создан
+        readOnly: true
+      - field: updated_at
+        label: Изменён
+        readOnly: true
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: name
+        label: Наименование
+        width: 20rem
+      - field: company_id
+        label: Компания
+        sortField: "company->>'descr'"
+        reference:
+          name: companyReference
+          import: "@/references/catalogueReferences"
+          field: company
+      - field: mode
+        label: Режим
+      - field: enabled
+        label: Активен
+      - field: device_id
+        label: Устройство ККТ
+  routes:
+    listName: fiscalProfiles
+    createName: fiscalProfileCreate
+    editName: fiscalProfileEdit
+
+# Migration 000006 owns the table; the admin list view has its own migration.
+migration:
+  enabled: false
+
+test:
+  enabled: false

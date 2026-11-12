@@ -41,7 +41,7 @@ func (r *cardRepositoryFixture) GetCompletion(context.Context, checkout.Owner, s
 }
 
 type cardBankFixture struct {
-	calls atomic.Int32
+	calls  atomic.Int32
 	create func(context.Context, BankRequest) (CardResult, error)
 }
 
@@ -87,7 +87,9 @@ func TestCardServicePersistsAndReusesHostedCheckout(t *testing.T) {
 
 func TestCardServiceNeverRepeatsUnknownRegistration(t *testing.T) {
 	s, repo, bank, actor, _ := cardServiceFixture()
-	bank.create = func(context.Context, BankRequest) (CardResult, error) { return CardResult{}, errors.New("unknown transport outcome") }
+	bank.create = func(context.Context, BankRequest) (CardResult, error) {
+		return CardResult{}, errors.New("unknown transport outcome")
+	}
 	view, err := s.InitCard(context.Background(), actor, "card-key", repo.order.ID)
 	if err != nil || view.State != "unknown" || view.CheckoutURL != "" {
 		t.Fatalf("view=%+v error=%v", view, err)
@@ -118,10 +120,15 @@ func TestCardGetPaidCompletionNeverExposesBankLinkAgain(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	receipt := &ReceiptView{Kind: "fiscal", TotalKopecks: 12345}
+	repo.completion = Completion{OrderState: "paid", YClientsSyncStatus: "succeeded", FiscalStatus: "issued", PaidAt: &now, BankReference: "approved-operation", Receipt: receipt}
+	pending, err := s.Get(context.Background(), actor, view.PaymentID)
+	if err != nil || pending.Receipt != nil {
+		t.Fatalf("pending attempt received fiscal receipt: %+v error=%v", pending, err)
+	}
 	repo.attempt.State = "paid"
-	repo.completion = Completion{OrderState: "paid", YClientsSyncStatus: "succeeded", FiscalStatus: "issued", PaidAt: &now, BankReference: "approved-operation"}
 	view, err = s.Get(context.Background(), actor, view.PaymentID)
-	if err != nil || view.Method != MethodCard || view.CheckoutURL != "" || view.QRImageURL != "" || view.YClientsSyncStatus != "succeeded" || view.FiscalStatus != "issued" || view.PaidAt == nil {
+	if err != nil || view.Method != MethodCard || view.CheckoutURL != "" || view.QRImageURL != "" || view.YClientsSyncStatus != "succeeded" || view.FiscalStatus != "issued" || view.PaidAt == nil || view.Receipt != receipt {
 		t.Fatalf("completion=%+v error=%v", view, err)
 	}
 }

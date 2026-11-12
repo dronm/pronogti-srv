@@ -90,6 +90,9 @@ func (r *memoryRepository) CloseLogin(_ context.Context, loginID, userID int64, 
 	}
 	return nil
 }
+func (r *memoryRepository) ChangePassword(context.Context, Account, int64, string, string) error {
+	return errors.New("unexpected password change")
+}
 
 func setup(t *testing.T) (*Service, *memoryRepository, *memorySession) {
 	t.Helper()
@@ -228,7 +231,10 @@ func TestSessionWriteFailureClosesSuccessfulAudit(t *testing.T) {
 }
 
 func TestPasswordHashBoundariesAndIPv6(t *testing.T) {
-	for _, password := range []string{"short", strings.Repeat("x", 73), string([]byte{0xff, 0xfe})} {
+	if _, err := HashPassword("abc123"); err != nil {
+		t.Fatalf("rejected a six-character password: %v", err)
+	}
+	for _, password := range []string{"short", strings.Repeat("я", 5), strings.Repeat("x", 73), string([]byte{0xff, 0xfe})} {
 		if _, err := HashPassword(password); err == nil {
 			t.Fatal("accepted invalid password")
 		}

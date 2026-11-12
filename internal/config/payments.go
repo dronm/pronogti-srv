@@ -3,19 +3,22 @@ package config
 import (
 	"errors"
 	"regexp"
+	"strings"
 	"time"
 )
 
 // PaymentsConfig supplies deployment-level settings. Bank profiles and kiosk
-// bindings live in PostgreSQL; token values stay in environment variables.
+// bindings live in PostgreSQL.
 type PaymentsConfig struct {
 	JWTKeyEnv              string `json:"jwt_key_env"`
+	JWTKey                 string `json:"jwt_key,omitempty"`
 	MockExternal           bool   `json:"mock_external"`
 	CreatingTimeoutSeconds int    `json:"creating_timeout_seconds"`
 	WorkerEnabled          bool   `json:"worker_enabled"`
 	PollInterval           string `json:"poll_interval"`
 	MockAutoPayAfter       string `json:"mock_auto_pay_after"`
 	WebhookEnabled         bool   `json:"webhook_enabled"`
+	WebhookPublicKey       string `json:"webhook_public_key,omitempty"`
 	WebhookPublicKeyEnv    string `json:"webhook_public_key_env"`
 }
 
@@ -51,8 +54,8 @@ func (c PaymentsConfig) Validate() error {
 	if c.WebhookPublicKeyEnv != "" && !regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`).MatchString(c.WebhookPublicKeyEnv) {
 		return errors.New("payments.webhook_public_key_env must name an environment variable")
 	}
-	if c.WebhookEnabled && c.WebhookPublicKeyEnv == "" {
-		return errors.New("payments.webhook_public_key_env is required when the bank webhook is enabled")
+	if c.WebhookEnabled && strings.TrimSpace(c.WebhookPublicKey) == "" && c.WebhookPublicKeyEnv == "" {
+		return errors.New("payments.webhook_public_key or payments.webhook_public_key_env is required when the bank webhook is enabled")
 	}
 	return nil
 }

@@ -55,6 +55,31 @@ func DefaultProfile(companyID int64) Profile {
 var deviceIDPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$`)
 var envNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
 
+// ValidTaxSystem reports whether the code is allowed in an FFD 1.2 receipt.
+func ValidTaxSystem(code int) bool {
+	switch code {
+	case 1, 2, 4, 16, 32:
+		return true
+	default:
+		return false
+	}
+}
+
+// ValidVATRate reports whether the code is a TerminalFA VAT rate.
+func ValidVATRate(code int) bool {
+	return code >= 1 && code <= 12
+}
+
+// ValidPaymentMethod reports whether the code is an FFD payment method.
+func ValidPaymentMethod(code int) bool {
+	return code >= 1 && code <= 7
+}
+
+// ValidTimeoutSeconds reports whether the driver HTTP timeout is supported.
+func ValidTimeoutSeconds(seconds int) bool {
+	return seconds >= 1 && seconds <= 300
+}
+
 // Validate checks the supported unmarked-receipt configuration. Tax codes are
 // explicit operator choices; this package does not infer them from the date.
 func (p Profile) Validate() error {
@@ -64,7 +89,7 @@ func (p Profile) Validate() error {
 	if p.Mode != "demo" && p.Mode != "live" {
 		return errors.New("fiscal mode must be demo or live")
 	}
-	if p.TimeoutSeconds < 1 || p.TimeoutSeconds > 300 {
+	if !ValidTimeoutSeconds(p.TimeoutSeconds) {
 		return errors.New("fiscal timeout must be between 1 and 300 seconds")
 	}
 	if p.Mode == "live" {
@@ -87,15 +112,13 @@ func (p Profile) Validate() error {
 			return errors.New("fiscal cashier INN must have exactly twelve decimal digits")
 		}
 	}
-	switch p.TaxSystem {
-	case 1, 2, 4, 16, 32:
-	default:
+	if !ValidTaxSystem(p.TaxSystem) {
 		return errors.New("unsupported fiscal tax system")
 	}
-	if p.ServiceVATRate < 1 || p.ServiceVATRate > 12 || p.GoodVATRate < 1 || p.GoodVATRate > 12 {
+	if !ValidVATRate(p.ServiceVATRate) || !ValidVATRate(p.GoodVATRate) {
 		return errors.New("fiscal VAT codes must be between 1 and 12")
 	}
-	if p.PaymentMethod < 1 || p.PaymentMethod > 7 {
+	if !ValidPaymentMethod(p.PaymentMethod) {
 		return errors.New("fiscal payment method must be between 1 and 7")
 	}
 	if err := receiptText("settlement address", p.SettlementAddress, 256, false); err != nil {

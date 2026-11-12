@@ -10,11 +10,14 @@ import (
 	"github.com/dronm/pronogti/internal/adminauth"
 	"github.com/dronm/pronogti/internal/adminnav"
 	"github.com/dronm/pronogti/internal/config"
+	"github.com/dronm/pronogti/internal/fiscal"
 	"github.com/dronm/pronogti/internal/httpapi"
+	"github.com/dronm/pronogti/internal/payment"
+	"github.com/dronm/pronogti/internal/refund"
 	websession "github.com/dronm/webapp/session"
 )
 
-func configuredAdministrator(cfg *config.Config, db ds.Provider) (http.Handler, func(), error) {
+func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgroundWorkers, paymentTokens payment.TokenSource) (http.Handler, func(), error) {
 	if !cfg.Admin.Enabled {
 		return nil, func() {}, nil
 	}
@@ -41,6 +44,18 @@ func configuredAdministrator(cfg *config.Config, db ds.Provider) (http.Handler, 
 		cleanup()
 		return nil, nil, err
 	}
-	handler := httpapi.NewAdminHandler(service, sessions, httpapi.AdminHTTPOptions{AllowedOrigins: cfg.Admin.AllowedOrigins, RequestTimeout: requestTimeout, Version: Version, Commit: Commit, BuildDate: BuildDate, Navigation: adminnav.NewService(db), GeneratedRoutes: generated, GeneratedPermissions: permissions})
+	options := httpapi.AdminHTTPOptions{
+		AllowedOrigins: cfg.Admin.AllowedOrigins, RequestTimeout: requestTimeout,
+		Version: Version, Commit: Commit, BuildDate: BuildDate,
+		Navigation: adminnav.NewService(db), GeneratedRoutes: generated, GeneratedPermissions: permissions,
+	}
+	if cfg.Refunds.Enabled {
+		refunds := refund.NewService(refund.NewPostgresRepository(db),
+			refund.SDKBank{Tokens: paymentTokens},
+			fiscal.HTTPDriver{}, cfg.Refunds.AllowLive && cfg.Fiscal.AllowLive)
+		options.Refunds = refunds
+		workers.Start("payment refunds", refunds.Run)
+	}
+	handler := httpapi.NewAdminHandler(service, sessions, options)
 	return handler, cleanup, nil
 }

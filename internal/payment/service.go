@@ -237,6 +237,17 @@ func (s *Service) Get(ctx context.Context, actor checkout.Actor, id string) (Vie
 		}
 		result.OrderState, result.YClientsSyncStatus, result.FiscalStatus = completion.OrderState, completion.YClientsSyncStatus, completion.FiscalStatus
 		result.PaidAt, result.BankReference = completion.PaidAt, completion.BankReference
+		if result.State == "paid" {
+			result.Receipt = completion.Receipt
+			if result.Environment == "production" && result.OrderState == "paid" && result.FiscalStatus == "issued" {
+				result.receiptEmailURL = s.sabyReceiptURL(completion)
+				if result.receiptEmailURL != "" {
+					receipt := *result.Receipt
+					receipt.EmailAvailable = true
+					result.Receipt = &receipt
+				}
+			}
+		}
 	}
 	if err := s.validateActor(ctx, actor); err != nil {
 		return View{}, err

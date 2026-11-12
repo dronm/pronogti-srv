@@ -1,0 +1,259 @@
+name: Kiosk
+comment: Kiosk is a provisioned payment device assigned to a salon.
+humanName: kiosk
+humanNamePlural: kiosks
+
+table:
+  schema: public
+  name: kiosks
+
+route: /admin/kiosks
+permissionPrefix: kiosk
+# Public kiosk routes already register the Kiosk service.
+serviceName: AdminKiosk
+sessionRequired: true
+crudNotifications: false
+service:
+  manualMethods: [create, detail, update, delete]
+
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+    autoIncrement: true
+    serverGenerated: true
+
+  - name: name
+    type: text
+    required: true
+    dbRequired: true
+    maxLen: 200
+    check: length(btrim(name)) BETWEEN 1 AND 200
+
+  - name: company_id
+    type: bigint
+    required: true
+    dbRequired: true
+    check: company_id > 0
+    comment: YClients company ID of the salon to which the kiosk is assigned.
+
+  - name: is_active
+    type: bool
+    required: true
+    dbRequired: true
+    default: "true"
+
+  # Existing composite foreign keys also require the profile's company_id.
+  - name: payment_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: payment_profiles
+      column: id
+    comment: Null uses the salon's default payment profile.
+
+  - name: fiscal_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: fiscal_profiles
+      column: id
+    comment: Null uses the salon's default fiscal profile.
+
+  - name: yclients_profile_id
+    type: bigint
+    nullable: true
+    references:
+      schema: public
+      table: yclients_profiles
+      column: id
+    comment: Null uses the salon's default YClients profile.
+
+  - name: session_version
+    type: bigint
+    serverGenerated: true
+    dbRequired: true
+    default: "1"
+
+  - name: created_at
+    type: timestamptz
+    serverGenerated: true
+    dbRequired: true
+    default: now()
+
+  - name: updated_at
+    type: timestamptz
+    serverGenerated: true
+    dbRequired: true
+    default: now()
+
+list:
+  model: KioskList
+  table:
+    schema: public
+    name: kiosks_list
+  fields:
+    - name: id
+      type: bigint
+      primaryKey: true
+    - name: name
+      type: text
+    - name: company_id
+      type: bigint
+    - name: company
+      type: json
+    - name: is_active
+      type: bool
+    - name: payment_profile_id
+      type: bigint
+      nullable: true
+    - name: payment_profile
+      type: json
+      nullable: true
+    - name: fiscal_profile_id
+      type: bigint
+      nullable: true
+    - name: fiscal_profile
+      type: json
+      nullable: true
+    - name: yclients_profile_id
+      type: bigint
+      nullable: true
+    - name: yclients_profile
+      type: json
+      nullable: true
+    - name: created_at
+      type: timestamptz
+    - name: updated_at
+      type: timestamptz
+
+# Credential creation and retirement use the manual admin service methods.
+crud:
+  create: true
+  list: true
+  detail: true
+  update: true
+  delete: true
+
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+  descriptions:
+    create: Создание киоска
+    list: Просмотр списка киосков
+    detail: Просмотр киоска
+    update: Изменение киоска
+    delete: Удаление киоска
+
+applicationRoute:
+  enabled: true
+  name: kiosks
+  path: /admin/kiosks
+  description: Киоски
+  section: Справочники
+  icon: pi pi-kiosks
+  menuAvailable: true
+
+frontend:
+  scaffold: true
+  title: Киоски
+  form:
+    enabled: true
+    columns: 2
+    createTitle: Новый киоск
+    editTitle: Настройки киоска
+    fields:
+      - field: id
+        label: ID
+        readOnly: true
+      - field: name
+        label: Наименование
+        autofocus: true
+      - field: company_id
+        label: Компания
+      - field: is_active
+        label: Активен
+        default: true
+      - field: payment_profile_id
+        label: Платёжный профиль
+      - field: fiscal_profile_id
+        label: Фискальный профиль
+      - field: yclients_profile_id
+        label: Профиль YClients
+      - field: session_version
+        label: Версия сессии
+        readOnly: true
+      - field: created_at
+        label: Создан
+        readOnly: true
+      - field: updated_at
+        label: Изменён
+        readOnly: true
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: id
+        label: ID
+        width: 6rem
+      - field: name
+        label: Наименование
+        width: 20rem
+      - field: company_id
+        label: Компания
+        width: 16rem
+        editable: false
+        sortField: "company->>'descr'"
+        reference:
+          name: companyReference
+          import: "@/references/catalogueReferences"
+          field: company
+      - field: is_active
+        label: Активен
+        width: 8rem
+      - field: payment_profile_id
+        label: Платёжный профиль
+        width: 18rem
+        sortField: "payment_profile->>'descr'"
+        reference:
+          name: paymentProfileReference
+          import: "@/references/catalogueReferences"
+          field: payment_profile
+      - field: fiscal_profile_id
+        label: Фискальный профиль
+        width: 18rem
+        sortField: "fiscal_profile->>'descr'"
+        reference:
+          name: fiscalProfileReference
+          import: "@/references/catalogueReferences"
+          field: fiscal_profile
+      - field: yclients_profile_id
+        label: Профиль YClients
+        width: 18rem
+        sortField: "yclients_profile->>'descr'"
+        reference:
+          name: yclientsProfileReference
+          import: "@/references/catalogueReferences"
+          field: yclients_profile
+      - field: updated_at
+        label: Изменён
+        width: 14rem
+  routes:
+    listName: kiosks
+    createName: kioskCreate
+    editName: kioskEdit
+
+# Existing table and triggers are owned by Pronogti's SQL migrations.
+migration:
+  enabled: false
+
+test:
+  enabled: false

@@ -40,6 +40,7 @@ func addCustomerRoutes(api webapp.Group, serviceName, namePrefix, sessionPath st
 	api.GET("/me/pay-draft", webapp.WithName(namePrefix+".payDraft"), webapp.WithService(serviceName, "PayDraft"), webapp.WithBinder(customerBinder))
 	api.POST("/client/register", webapp.WithName(namePrefix+".register"), webapp.WithService(serviceName, "RegisterClient"), webapp.WithBinder(kioskRegisterBinder))
 	api.GET("/payments/{id}", webapp.WithName(namePrefix+".payment.get"), webapp.WithService(serviceName, "GetPayment"), webapp.WithBinder(paymentGetBinder))
+	api.POST("/payments/{id}/receipt-email", webapp.WithName(namePrefix+".payment.receiptEmail"), webapp.WithService(serviceName, "SendReceiptEmail"), webapp.WithBinder(receiptEmailBinder))
 	api.POST("/init-qr-pay", webapp.WithName(namePrefix+".initQR"), webapp.WithService(serviceName, "InitQRPayment"), webapp.WithBinder(kioskQRBinder))
 	api.POST("/init-card-pay", webapp.WithName(namePrefix+".initCard"), webapp.WithService(serviceName, "InitCardPayment"), webapp.WithBinder(kioskQRBinder))
 }

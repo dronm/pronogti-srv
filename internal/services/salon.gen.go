@@ -93,7 +93,7 @@ func (s *SalonService) Update(
 func (s *SalonService) Detail(
 	ctx context.Context,
 	company_id int64,
-) (*models.Salon, error) {
+) (*models.SalonDetail, error) {
 	if err := s.requireSession(); err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (s *SalonService) Detail(
 		models.SalonKey{
 			CompanyID: company_id,
 		},
-		&models.Salon{},
+		&models.SalonDetail{},
 	)
 	if err != nil {
 		if errors.Is(err, ds.ErrNoRows) {

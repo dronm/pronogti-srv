@@ -85,6 +85,35 @@ func (r *PostgresRepository) CloseLogin(ctx context.Context, loginID, userID int
 	return err
 }
 
+func (r *PostgresRepository) ChangePassword(ctx context.Context, expected Account, loginID int64, sessionHash, passwordHash string) error {
+	conn, release, err := r.connection(ctx)
+	if err != nil {
+		return err
+	}
+	defer release()
+	err = ds.WithTx(ctx, conn, func(ctx context.Context, tx ds.Tx) error {
+		// Take the user lock before the login lock, matching password revocation.
+		var id int64
+		if err := tx.QueryRow(ctx, `SELECT id::bigint FROM public.users
+			WHERE id=$1 AND session_version=$2 AND role_id='admin' AND NOT COALESCE(banned,false)
+			FOR UPDATE`, expected.ID, expected.SessionVersion).Scan(&id); err != nil {
+			return err
+		}
+		if err := tx.QueryRow(ctx, `SELECT id::bigint FROM public.logins
+			WHERE user_id=$1 AND id=$2 AND session_id=$3 AND auth_kind='admin' AND date_time_out IS NULL
+			FOR UPDATE`, expected.ID, loginID, sessionHash).Scan(&id); err != nil {
+			return err
+		}
+		// The users_admin_auth_before_update trigger revokes all admin logins.
+		_, err := tx.Exec(ctx, `UPDATE public.users SET password_hash=$2,pwd=NULL WHERE id=$1`, expected.ID, passwordHash)
+		return err
+	})
+	if errors.Is(err, ds.ErrNoRows) {
+		return ErrCredentials
+	}
+	return err
+}
+
 // Provision creates a new administrator or explicitly resets an existing
 // administrator's password. It never silently promotes a customer account.
 func (r *PostgresRepository) Provision(ctx context.Context, name, passwordHash string, reset bool) (User, error) {

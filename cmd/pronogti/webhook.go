@@ -2,9 +2,9 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"net/http"
 	"os"
+	"strings"
 
 	"github.com/dronm/paytochkabank"
 	"github.com/dronm/pronogti/internal/config"
@@ -17,9 +17,12 @@ func configuredWebhook(cfg config.PaymentsConfig, receive payment.WebhookReceive
 	if !cfg.WebhookEnabled {
 		return nil, nil
 	}
-	value, ok := os.LookupEnv(cfg.WebhookPublicKeyEnv)
-	if !ok || value == "" {
-		return nil, fmt.Errorf("payments.webhook_public_key_env requires environment variable %s", cfg.WebhookPublicKeyEnv)
+	value := strings.TrimSpace(cfg.WebhookPublicKey)
+	if value == "" {
+		value = strings.TrimSpace(os.Getenv(cfg.WebhookPublicKeyEnv))
+	}
+	if value == "" {
+		return nil, errors.New("bank webhook requires a public key in payments.webhook_public_key or the environment variable named by payments.webhook_public_key_env")
 	}
 	publicKey, err := paytochkabank.ParseWebhookPublicKey([]byte(value))
 	if err != nil {

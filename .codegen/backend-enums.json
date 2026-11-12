@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"files": [
+		{
+			"path": "internal/models/catalogueExecutionMode.enum.gen.go",
+			"sha256": "09e40a2d7d499eb866e9d686b846560913c96739110b3aa7b93fe52be6c5c8fc"
+		},
+		{
+			"path": "internal/models/paymentProfileEnvironment.enum.gen.go",
+			"sha256": "b7d473bfdf37b24522480277838da344bc8050b5d76f7208c56d8124e46fe462"
+		},
+		{
+			"path": "internal/models/yClientsServicePolicy.enum.gen.go",
+			"sha256": "3e63c0511d33da5ee16a6a9a644a0323b46ea12372797cc66dc8c480cdc6cf86"
+		},
+		{
+			"path": "internal/models/enums_registry.gen.go",
+			"sha256": "1aaff972189de232bbf1803e99f97ee384a55ff0b3510e97602a5fb804fd420f"
+		}
+	]
+}

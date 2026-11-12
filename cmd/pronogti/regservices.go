@@ -13,12 +13,24 @@ import (
 	"github.com/dronm/pronogti/internal/httpapi"
 	"github.com/dronm/pronogti/internal/kiosk"
 	"github.com/dronm/pronogti/internal/payment"
+	"github.com/dronm/pronogti/internal/receiptmail"
 	"github.com/dronm/pronogti/internal/salon"
 	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/pronogti/internal/settlement"
 )
 
-func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.Registry, db ds.Provider) (*services.YClientService, error) {
+func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.Registry, db ds.Provider, paymentTokens *payment.EnvironmentTokens) (*services.YClientService, error) {
+	mailer, err := receiptmail.New(cfg.ReceiptEmail)
+	if err != nil {
+		return nil, err
+	}
+	var receiptEmail *payment.ReceiptEmailDependencies
+	if mailer != nil {
+		receiptEmail = &payment.ReceiptEmailDependencies{
+			RegistrationNumber: cfg.ReceiptEmail.SabyRegistrationNumber,
+			Send:               mailer.Send,
+		}
+	}
 	clientTimeout, err := cfg.ClientTimeout()
 	if err != nil {
 		return nil, err
@@ -40,14 +52,16 @@ func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.
 	settlements := settlement.NewPostgresRepository(db)
 	settlementProvider := services.NewSettlementProvider(backend)
 	backend.SetPaidVisitLookup(settlements.HeldPaidVisits)
+	httpapi.ConfigurePaymentProfileCredentials(paymentTokens)
 	httpapi.RegisterServices(backend, registry, kiosk.Options{CustomerMaxLifeTime: cfg.Session.CustomerMaxLifeTime, CustomerMaxIdleTime: cfg.Session.CustomerMaxIdleTime, Salons: salons}, httpapi.CheckoutDependencies{
 		Provider: services.NewCheckoutProvider(backend), Repository: checkout.NewPostgresRepository(db), MaxLifeTime: cfg.Checkout.MaxLifeTime,
 		ValidateOrder: fiscal.NewPostgresRepository(db).ValidateCheckout,
 		Payment: &payment.Dependencies{
-			Repository: payment.NewPostgresRepository(db),
-			Bank:       &payment.SDKBank{MockExternal: cfg.Payments.MockExternal},
-			CardBank:   &payment.SDKCardBank{MockExternal: cfg.Payments.MockExternal},
-			Tokens:     payment.NewEnvironmentTokens(cfg.Payments.JWTKeyEnv),
+			Repository:   payment.NewPostgresRepository(db),
+			Bank:         &payment.SDKBank{MockExternal: cfg.Payments.MockExternal},
+			CardBank:     &payment.SDKCardBank{MockExternal: cfg.Payments.MockExternal},
+			Tokens:       paymentTokens,
+			ReceiptEmail: receiptEmail,
 			ValidatePayable: func(ctx context.Context, order checkout.Order) error {
 				if err := services.NewCheckoutProvider(backend).ValidatePayable(ctx, order); err != nil {
 					return err

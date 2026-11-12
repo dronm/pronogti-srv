@@ -1,6 +1,10 @@
 package config
 
-import "testing"
+import (
+	"strings"
+	"testing"
+	"time"
+)
 
 func TestPaymentConfigDefaultsAndValidation(t *testing.T) {
 	cfg := defaultConfig()
@@ -18,5 +22,27 @@ func TestPaymentConfigDefaultsAndValidation(t *testing.T) {
 		if err := c.Validate(); err == nil {
 			t.Fatalf("invalid payment settings accepted: %+v", c)
 		}
+	}
+}
+
+func TestPaymentJWTKeySurvivesConfigRewrite(t *testing.T) {
+	key := strings.Repeat("7f", 32)
+	path := writeConfig(t, `{"payments":{"jwt_key":"`+key+`"},`+testCredentials+`}`)
+	cfg, err := Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Payments.JWTKey != key {
+		t.Fatal("inline payment key was not loaded")
+	}
+	if err := cfg.SaveYClientsToken("fixture", time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Load(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Payments.JWTKey != key {
+		t.Fatal("config rewrite dropped the inline payment key")
 	}
 }

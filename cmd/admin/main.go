@@ -75,8 +75,9 @@ func readPassword(input io.Reader, envName string, getenv func(string) string) (
 	if err != nil {
 		return "", errors.New("administrator password could not be read from stdin")
 	}
+	//fmt.Println("len:",len(value))
 	if len(value) >= 75 {
-		return "", errors.New("password must contain between 12 and 72 UTF-8 bytes")
+		return "", fmt.Errorf("password must fit within %d bytes", adminauth.PWD_MAX_LEN)
 	}
 	password := strings.TrimSuffix(string(value), "\n")
 	password = strings.TrimSuffix(password, "\r")

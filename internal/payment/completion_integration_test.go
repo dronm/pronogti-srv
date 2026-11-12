@@ -196,6 +196,11 @@ func TestCompletionIntegrationDemoFlow(t *testing.T) {
 	if err != nil || view.State != "paid" || view.OrderState != "paid" || view.YClientsSyncStatus != "demo" || view.FiscalStatus != "demo" || view.PaidAt == nil {
 		t.Fatalf("completed view: %+v, %v", view, err)
 	}
+	if view.Receipt == nil || view.Receipt.Kind != "demo" || view.Receipt.Currency != "RUB" || view.Receipt.TotalKopecks != 12345 ||
+		len(view.Receipt.Items) != 1 || view.Receipt.Items[0].Name != "Integration good" || view.Receipt.Items[0].AmountKopecks != 12345 ||
+		view.Receipt.DateTime != "" || view.Receipt.FiscalSign != nil || view.Receipt.DocumentNumber != nil {
+		t.Fatalf("demo receipt: %+v", view.Receipt)
+	}
 	other := actor
 	other.CustomerSessionID = "next-customer"
 	_, err = service.Get(ctx, other, view.PaymentID)

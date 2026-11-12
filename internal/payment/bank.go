@@ -31,6 +31,18 @@ type SDKBank struct {
 	MockExternal bool
 }
 
+// TochkaBankBIC is the default bank identifier for Tochka settlement accounts.
+const TochkaBankBIC = "044525104"
+
+// TochkaAccountID adds the bank's BIC to a bare account number. Existing
+// account-number/BIC values identify their bank explicitly.
+func TochkaAccountID(account string) string {
+	if account == "" || strings.Contains(account, "/") {
+		return account
+	}
+	return account + "/" + TochkaBankBIC
+}
+
 func (b SDKBank) Create(ctx context.Context, request BankRequest) (QRResult, error) {
 	if ctx == nil || request.AmountKopecks <= 0 || request.TTLMinutes < 1 || request.TTLMinutes > 129600 || request.StartedAt.IsZero() {
 		return QRResult{}, &BankError{Code: "bank_invalid_request"}
@@ -55,7 +67,7 @@ func (b SDKBank) Create(ctx context.Context, request BankRequest) (QRResult, err
 		return QRResult{}, &BankError{Code: "bank_invalid_configuration"}
 	}
 	result, err := client.SBP.CreateDynamicQR(ctx, paytochkabank.CreateDynamicQRRequest{
-		MerchantID: request.Profile.SBPMerchantID, AccountID: request.Profile.AccountID,
+		MerchantID: request.Profile.SBPMerchantID, AccountID: TochkaAccountID(request.Profile.AccountID),
 		Amount: paytochkabank.Money(request.AmountKopecks), PaymentPurpose: request.Purpose,
 		TTLMinutes: request.TTLMinutes, SourceName: "pronogti",
 		ImageParams: &paytochkabank.QRImageParams{Width: 512, Height: 512, MediaType: "image/png"},
@@ -109,6 +121,11 @@ func allowedBankEndpoint(environment, value string) bool {
 	default:
 		return false
 	}
+}
+
+// AllowedBankEndpoint applies the same endpoint policy to sale and refund operations.
+func AllowedBankEndpoint(environment, value string) bool {
+	return allowedBankEndpoint(environment, value)
 }
 
 // Keep compile-time interface checking beside the implementation.

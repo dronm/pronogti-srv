@@ -5,5 +5,13 @@ package httpapi
 import "github.com/dronm/webapp"
 
 func registerGeneratedRoutes(api *webapp.Group) {
+	companyRoutes(api)
+	fiscalProfileRoutes(api)
+	kioskRoutes(api)
+	paymentAttemptRoutes(api)
+	paymentEventRoutes(api)
+	paymentOrderRoutes(api)
+	paymentProfileRoutes(api)
 	salonRoutes(api)
+	yClientsProfileRoutes(api)
 }

@@ -15,20 +15,24 @@ HTTP durations use Go duration strings. Session lifetimes below use seconds.
 | `database.primary_env` | Environment variable containing the primary DSN; default `PRONOGTI_DATABASE_URL` |
 | `database.secondaries` | Optional named secondary connection strings |
 | `checkout.max_life_time` | Prepared checkout lifetime in seconds; `900`; valid range 1..3600 |
-| `payments.jwt_key_env` | Environment variable holding the encryption key for ciphertext JWT profiles; default `PRONOGTI_PAYMENT_JWT_KEY`; resolved only when needed |
+| `payments.jwt_key` | Optional encryption key for saved payment-profile JWTs. A nonempty value takes precedence over `payments.jwt_key_env`. |
+| `payments.jwt_key_env` | Names the environment variable for the encryption key when `payments.jwt_key` is omitted or empty. Defaults to `PRONOGTI_PAYMENT_JWT_KEY` and is read when needed. |
 | `payments.mock_external` | Use an external loopback mock endpoint for mock profiles; `false` selects the in-process, nonpayable demo |
 | `payments.creating_timeout_seconds` | Minimum stale-creation threshold; `120`; actual threshold also covers the configured bank timeout |
 | `payments.worker_enabled` | Run browser-independent bank reconciliation; `true` |
 | `payments.poll_interval` | Poll the durable confirmation queue; `2s`; valid range `1s`..`1m` |
 | `payments.mock_auto_pay_after` | Server-only built-in mock completion delay; `2s`; `0s` disables auto-completion |
 | `payments.webhook_enabled` | Mount the signed bank callback outside customer sessions; `false` until its public key is configured |
-| `payments.webhook_public_key_env` | Environment variable holding the bank's PEM/JWK verification key; default `PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY` |
+| `payments.webhook_public_key` | Webhook verification key as a JSON string containing the full RSA PEM or a single RSA JWK |
+| `payments.webhook_public_key_env` | Fallback environment-variable name when `payments.webhook_public_key` is empty. Defaults to `PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY` |
 | `settlement.worker_enabled` | Run durable YClients synchronization; `true` |
 | `settlement.allow_live` | Permit live YClients writes for a live profile and production payment; `false` |
 | `settlement.poll_interval` | Synchronization queue polling; `2s`; valid range `1s`..`1m` |
 | `fiscal.worker_enabled` | Run the durable receipt worker; `true`; disabling pauses pending jobs |
 | `fiscal.allow_live` | Permit live receipts only for live profiles and production payments; `false` |
 | `fiscal.poll_interval` | Receipt worker polling interval; `2s`; valid range `1s`..`1m` |
+| `receipt_email.enabled` | Offer to email a Saby OFD link on issued production receipts; `false` |
+| `receipt_email.saby_devices` | Maps the receipt's frozen driver URL and device ID to its KKT registration number |
 | `session.enabled` | `true`; the customer/kiosk APIs require sessions and startup rejects a disabled configuration |
 | `session.cookie_name` | `_pronogti_s`, separate from Meatshop cookies |
 | `session.kiosk_cookie_name` | `_pronogti_kiosk`; durable device credential cookie, distinct from `cookie_name` |
@@ -66,11 +70,38 @@ The loader adds DELETE, the salon/customer session headers and `Idempotency-Key`
 
 Checkout lifetime is independent of Redis/customer lifetime. A prepared order is an immutable local quote; retrieving it still requires the same active customer interaction. Enabled `payment_profiles` are selected per kiosk or salon for QR creation. Profiles can reference a JWT through `jwt_env` or use encrypted JWT bytes with the deployment key. See [QR payments](qr-payments.md) for demo/sandbox/production settings and browser-independent confirmation.
 
+The encryption key must decode to exactly 32 bytes from hex or standard base64. Pronogti validates a nonempty `payments.jwt_key` at startup. When moving an existing key from the environment into JSON, copy the same value so existing JWTs remain decryptable. Keep the file private to the account running Pronogti. Each payment profile's `jwt_env` names the variable holding its bank token and is independent of the encryption key.
+
 Receipt device, cashier and fiscal settings live in company-owned `fiscal_profiles`, selected by `kiosks.fiscal_profile_id` or `salons.default_fiscal_profile_id`. Profiles default to demo mode, and mock/sandbox payments always stay in demo. Live receipt service credentials are resolved through the profile's `bearer_token_env` environment-variable name. See [receipt configuration](fiscalization.md) for profile examples and the separate driver process.
+
+## Emailing Saby OFD receipt links
+
+Apply migration `000021_receipt_email` before enabling the feature. Copy the
+`receipt_email` section from `config.example.json` into the backend config and
+set `enabled` to `true`. Set the SMTP host, username and authorized From
+address for your relay. Use `smtp_tls_mode: "starttls"` for STARTTLS, commonly
+on port 587, or `"implicit"` for implicit TLS, commonly on port 465. Set
+`PRONOGTI_RECEIPT_SMTP_PASSWORD` in the backend process environment, or use the
+variable named by `smtp_password_env`.
+
+For each KKT reporting to Saby, add its `driver_base_url`, `device_id` and
+`registration_number` to `saby_devices`. Use the same URL and logical device ID
+as in the fiscal profile. Keep the KKT registration number as a string to
+preserve leading zeros. If you replace the KKT, give it a new logical device
+ID and keep the older mapping for older receipts.
+
+After the backend issues a production receipt, the current customer can select
+**Отправить на email** on the kiosk payment screen and enter their address. The
+email includes the direct Saby link and the fiscal fields for Saby's public
+lookup. Each receipt allows three send attempts with a 30-second cooldown.
+The backend stores only the attempt count and last-attempt time for this
+feature. Demo and sandbox receipts do not offer email delivery.
+
+## Runtime settings
 
 YClients synchronization settings live in company-owned `yclients_profiles`, selected by `kiosks.yclients_profile_id` or `salons.default_yclients_profile_id`. The selected profile and receipt contact are frozen with the checkout. These settings are separate from the acquiring bank profile and Terminal FA profile. See [YClients settlement](yclients-settlement.md).
 
-Bank confirmation, YClients synchronization and receipt workers continue independently of customer logout or browser closure. Enabling the bank callback requires a valid PEM or RSA JWK public key in the named environment variable at startup. The shared callback URL is `/payments/tochka/webhook`; `/payments/tochka/webhook/PROFILE_ID` is an optional profile restriction. Neither requires a Redis cookie or customer headers. Payment and receipt secrets are never substituted into responses.
+Bank confirmation, YClients synchronization and receipt workers continue independently of customer logout or browser closure. Pronogti validates the webhook public key at startup when `payments.webhook_enabled` is `true`. The shared callback URL is `/payments/tochka/webhook`, with `/payments/tochka/webhook/PROFILE_ID` as an optional profile restriction. Both routes work without a Redis cookie or customer headers. Payment and receipt secrets are never substituted into responses.
 
 Both cookies are HttpOnly and share the configured domain, Secure and SameSite settings. PostgreSQL stores the public salon directory, kiosk bindings and device-token hashes. Redis holds the current salon/customer context through the existing session library. Redis must be available at startup. Public discovery and slug selection intentionally support unregistered personal browsers; customer/catalog operations require a selected salon, and device aliases require a registered kiosk.
 

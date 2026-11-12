@@ -1,0 +1,126 @@
+name: PaymentEvent
+comment: Read-only administrator projection.
+table:
+  schema: public
+  name: admin_payment_events
+route: /admin/payment-events
+permissionPrefix: paymentEvent
+serviceName: AdminPaymentEvent
+sessionRequired: true
+crudNotifications: false
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: payment_id
+    type: text
+    nullable: true
+  - name: order_id
+    type: text
+    nullable: true
+  - name: company_id
+    type: bigint
+    nullable: true
+  - name: salon_name
+    type: text
+    nullable: true
+  - name: payment_profile_id
+    type: bigint
+    nullable: true
+  - name: provider
+    type: text
+  - name: environment
+    type: text
+  - name: event_type
+    type: text
+  - name: source
+    type: text
+  - name: processing_state
+    type: text
+  - name: received_at
+    type: timestamptz
+  - name: next_matching_at
+    type: timestamptz
+  - name: processed_at
+    type: timestamptz
+    nullable: true
+  - name: processing_error
+    type: text
+    nullable: true
+  - name: signature_verified
+    type: bool
+crud:
+  create: false
+  list: true
+  detail: false
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: true
+  name: paymentEvents
+  path: /admin/payment-events
+  description: События оплаты
+  section: Платежи
+  icon: pi pi-clock
+  menuAvailable: true
+frontend:
+  scaffold: true
+  title: События оплаты
+  form:
+    enabled: false
+  list:
+    editMode: page
+    pageSize: 30
+    columns:
+      - field: received_at
+        label: Получено
+        width: 11rem
+      - field: order_id
+        label: Заказ
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: payment_id
+        label: Оплата
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: event_type
+        label: Событие
+        width: 13rem
+      - field: source
+        label: Источник
+        width: 9rem
+        searchOperations:
+          - exact
+      - field: environment
+        label: Среда
+        width: 8rem
+        searchOperations:
+          - exact
+      - field: processing_state
+        label: Обработка
+        width: 10rem
+        searchOperations:
+          - exact
+      - field: signature_verified
+        label: Подпись
+        width: 8rem
+        searchable: false
+      - field: processing_error
+        label: Ошибка
+        width: 15rem
+  routes:
+    listName: paymentEvents
+migration:
+  enabled: false
+test:
+  enabled: false

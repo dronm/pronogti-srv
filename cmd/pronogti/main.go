@@ -49,6 +49,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	paymentTokens, err := payment.NewConfiguredTokens(cfg.Payments.JWTKeyEnv, cfg.Payments.JWTKey)
+	if err != nil {
+		return fmt.Errorf("payments.jwt_key: %w", err)
+	}
 	if err := weblogger.Init(cfg.Debug.LogLevel, cfg.Debug.LogFormat); err != nil {
 		return fmt.Errorf("initialize logger: %w", err)
 	}
@@ -80,7 +84,7 @@ func run() error {
 	defer sessionManager.Core().StopGC()
 	registry := kiosk.NewPostgresRegistry(db)
 	salons := salon.NewPostgresRegistry(db)
-	backend, err := registerServices(cfg, registry, salons, db)
+	backend, err := registerServices(cfg, registry, salons, db, paymentTokens)
 	if err != nil {
 		return fmt.Errorf("register services: %w", err)
 	}
@@ -115,11 +119,11 @@ func run() error {
 		if err != nil {
 			return err
 		}
-		worker := payment.NewConfirmationWorker(confirmationRepository, payment.SDKChecker{MockExternal: cfg.Payments.MockExternal}, payment.NewEnvironmentTokens(cfg.Payments.JWTKeyEnv), payment.ConfirmationOptions{
+		worker := payment.NewConfirmationWorker(confirmationRepository, payment.SDKChecker{MockExternal: cfg.Payments.MockExternal}, paymentTokens, payment.ConfirmationOptions{
 			PollInterval: poll, MockExternal: cfg.Payments.MockExternal, MockAutoPayAfter: mockDelay,
 		})
 		workers.Start("payment confirmation", worker.Run)
-		cardWorker := payment.NewCardConfirmationWorker(confirmationRepository, payment.SDKCardChecker{MockExternal: cfg.Payments.MockExternal}, payment.NewEnvironmentTokens(cfg.Payments.JWTKeyEnv), payment.ConfirmationOptions{
+		cardWorker := payment.NewCardConfirmationWorker(confirmationRepository, payment.SDKCardChecker{MockExternal: cfg.Payments.MockExternal}, paymentTokens, payment.ConfirmationOptions{
 			PollInterval: poll, MockExternal: cfg.Payments.MockExternal, MockAutoPayAfter: mockDelay,
 		})
 		workers.Start("card payment confirmation", cardWorker.Run)
@@ -170,7 +174,7 @@ func run() error {
 		httpapi.SalonScopeMiddleware(),
 	}
 	router := webapp.MustBuildRouter(appContext, httpapi.BuildRoutes(), middlewares...)
-	administrator, closeAdministrator, err := configuredAdministrator(cfg, db)
+	administrator, closeAdministrator, err := configuredAdministrator(cfg, db, workers, paymentTokens)
 	if err != nil {
 		return err
 	}
