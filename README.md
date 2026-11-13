@@ -58,6 +58,7 @@ The separate administrator Vue app lives at `dronm-workspace/apps/pronogti-admin
 - [Configuration](docs/configuration.md)
 - [API](docs/api.md)
 - [Development, Make commands and tests](docs/development.md)
+- [Deployment setup and commands](deploy/README.md)
 
 ## Layout
 

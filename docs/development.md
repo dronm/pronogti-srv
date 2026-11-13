@@ -44,12 +44,36 @@ The Makefile resolves paths and its optional `.env` file from the project root, 
 | `make migadd <name>` | Create a migration pair |
 | `make migfix <version>` / `make migver` | Force or inspect the migration version |
 | `make runsql <name>` | Run a SQL script using `internal/scripts/run_sql.php` |
-| `make deploy` / `make deploy-full` / `make deploy-backend` | Run `internal/scripts/deploy.sh --backend-only` |
-| `make deploy-no-migrations` | Deploy with `--backend-only --skip-migrations` |
+| `make deploy` / `make deploy-all` / `make deploy-full` | Build and deploy the backend, admin frontend and kiosk frontend |
+| `make deploy-backend` | Build and deploy only the backend, with migrations |
+| `make deploy-frontend` / `make deploy-frontends` | Build and deploy both frontends |
+| `make deploy-admin` / `make deploy-kiosk` | Build and deploy one frontend |
+| `make deploy-no-migrations` | Deploy all components without applying migrations |
+| `make deploy-migrations` | Copy all migrations to every server and apply pending migrations once |
+| `make deploy-plan` | Display the configured deployment plan without building or contacting servers |
 
 Override build settings on the command line, for example `make prod VERSION=1.0.0` or `make build GO=/path/to/go`.
 
-The project includes `codegen.yaml` and its first object definition, `schema/salon.yaml`; see [code generation schemas](../schema/README.md). Codegen is not declared as a Go tool dependency yet. The project does not currently contain an API integration-test package or deployment/SQL helpers. Targets with missing prerequisites report them. Add deployment helpers under `internal/scripts/` to use their commands; set `DB_CONN` for database commands. No bot or frontend deployment targets are included.
+The project includes `codegen.yaml`, schema definitions and the codegen Go tool dependency; see [code generation schemas](../schema/README.md). The project does not currently contain an API integration-test package or `internal/scripts/run_sql.php`. Those targets report missing prerequisites. Set `DB_CONN` for local database commands.
+
+## Deployment
+
+The `deploy/` directory contains the deployment scripts and configuration example. The single `pronogti` API executable serves both the kiosk/customer API and administrator API. The administrator and kiosk frontends are separate builds; `cmd/admin` provisions credentials and is not a second HTTP server.
+
+Copy `deploy/deploy.conf.example` to `deploy/deploy.conf`, then set the SSH server list, service name, frontend source paths and migration settings. The administrator source is `/home/andrey/www/dronm-workspace/apps/pronogti-admin`. Set `KIOSK_DIR` to the actual kiosk frontend source directory; the uploaded archive only contains backend sources.
+
+The configured production directory is `/home/andrey/www/www.katren.org/htdocs/pronogti`. The executable is published as `pronogti`, kiosk assets as `dist/`, and administrator assets as `admin/`. Keep the runtime `config.json` at a stable path outside release directories.
+
+```sh
+cp deploy/deploy.conf.example deploy/deploy.conf
+# Edit deploy/deploy.conf before deploying.
+make deploy-plan
+make deploy-all
+```
+
+`DEPLOY_CONFIG` selects another trusted Bash configuration. `DEPLOY_ARGS` passes additional options to the deployment script, for example `make deploy-backend DEPLOY_ARGS=--skip-migrations`. Frontend-only targets do not apply database migrations.
+
+Deployment stages versioned releases on every configured server before publishing them. Pending migrations run once against the shared primary database before activation. See [deployment setup](../deploy/README.md) for server prerequisites, production paths, service permissions, frontend build settings and activation behavior.
 
 ## Tests
 

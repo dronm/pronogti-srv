@@ -1,0 +1,18 @@
+[Unit]
+Description=Pronogti API and background workers
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=andrey
+Group=andrey
+WorkingDirectory=/home/andrey/www/www.katren.org/htdocs/pronogti
+ExecStart=/home/andrey/www/www.katren.org/htdocs/pronogti/pronogti -config /home/andrey/www/www.katren.org/htdocs/pronogti/config.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+UMask=0027
+
+[Install]
+WantedBy=multi-user.target

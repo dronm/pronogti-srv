@@ -5,8 +5,11 @@ APP_NAME := pronogti
 CMD_PATH := ./cmd/$(APP_NAME)
 MIGRATIONS_DIR := $(ROOT_DIR)migrations
 SQL_MIGRATIONS_DIR := $(MIGRATIONS_DIR)/sql
-DEPLOY_DIR := $(ROOT_DIR)internal/scripts
-BUILD_OUTPUT := $(ROOT_DIR)$(APP_NAME)
+SCRIPT_DIR := $(ROOT_DIR)internal/scripts
+DEPLOY_DIR := $(ROOT_DIR)deploy
+BUILD_OUTPUT ?= $(ROOT_DIR)$(APP_NAME)
+DEPLOY_CONFIG ?= $(DEPLOY_DIR)/deploy.conf
+DEPLOY_ARGS ?=
 
 GO ?= go
 CONFIG_FILE ?= $(ROOT_DIR)config.json
@@ -36,8 +39,15 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 	migver \
 	runsql \
 	deploy \
+	deploy-all \
 	deploy-full \
 	deploy-backend \
+	deploy-frontend \
+	deploy-frontends \
+	deploy-admin \
+	deploy-kiosk \
+	deploy-migrations \
+	deploy-plan \
 	deploy-no-migrations
 
 # Development build with debugging information.
@@ -129,29 +139,32 @@ migver:
 runsql:
 	@test -n "$(word 2, $(MAKECMDGOALS))" || \
 		(echo "Usage: make runsql <script_name>"; exit 1)
-	@test -f "$(DEPLOY_DIR)/run_sql.php" || \
+	@test -f "$(SCRIPT_DIR)/run_sql.php" || \
 		(echo "SQL helper is missing: internal/scripts/run_sql.php."; exit 1)
 	@test -n "$(DB_CONN)" || (echo "Set DB_CONN in .env or on the make command line."; exit 1)
-	@php "$(DEPLOY_DIR)/run_sql.php" \
+	@php "$(SCRIPT_DIR)/run_sql.php" \
 		"$(DB_CONN)" \
 		"$(word 2, $(MAKECMDGOALS))" \
 		"$(SQL_MIGRATIONS_DIR)"
 
-# Every deployment command is restricted to the backend.
-deploy-backend:
-	@test -x "$(DEPLOY_DIR)/deploy.sh" || \
-		(echo "Executable deployment helper is missing: internal/scripts/deploy.sh."; exit 1)
-	@echo "Deploying backend..."
-	@"$(DEPLOY_DIR)/deploy.sh" --backend-only
+# Build and deploy the API, admin SPA and kiosk SPA by default.
+# DEPLOY_CONFIG selects a trusted Bash config; DEPLOY_ARGS adds script options.
+deploy: DEPLOY_MODE = --all
+deploy-backend: DEPLOY_MODE = --backend-only
+deploy-frontends: DEPLOY_MODE = --frontends-only
+deploy-admin: DEPLOY_MODE = --admin-only
+deploy-kiosk: DEPLOY_MODE = --kiosk-only
+deploy-migrations: DEPLOY_MODE = --migrations-only
+deploy-plan: DEPLOY_MODE = --all --dry-run
+deploy-no-migrations: DEPLOY_MODE = --all --skip-migrations
 
-deploy-no-migrations:
-	@test -x "$(DEPLOY_DIR)/deploy.sh" || \
-		(echo "Executable deployment helper is missing: internal/scripts/deploy.sh."; exit 1)
-	@echo "Deploying backend without migrations..."
-	@"$(DEPLOY_DIR)/deploy.sh" --backend-only --skip-migrations
+deploy deploy-backend deploy-frontends deploy-admin deploy-kiosk deploy-migrations deploy-plan deploy-no-migrations:
+	@test -r "$(DEPLOY_DIR)/deploy.sh" || \
+		(echo "Deployment helper is missing: deploy/deploy.sh."; exit 1)
+	@DEPLOY_CONFIG="$(DEPLOY_CONFIG)" bash "$(DEPLOY_DIR)/deploy.sh" $(DEPLOY_MODE) $(DEPLOY_ARGS)
 
-deploy: deploy-backend
-deploy-full: deploy-backend
+deploy-all deploy-full: deploy
+deploy-frontend: deploy-frontends
 
 # Usage: make codegen [gen|check|valid]
 # Requires schema definitions and a codegen tool declared in go.mod.

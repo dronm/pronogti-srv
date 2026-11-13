@@ -51,6 +51,7 @@
 		"poll_interval": "2s"
 	},
 	"payments": {
+		"jwt_key_env": "PRONOGTI_PAYMENT_JWT_KEY",
 		"jwt_key": "abf723c42140fd1fdf089aa6aaaf6fdd8b444f20512b7b3569221431dda6ff67",
 		"mock_external": false,
 		"creating_timeout_seconds": 120,
@@ -120,7 +121,7 @@
 		"login": "89220000036",
 		"password": "04041986",
 		"UserToken": "1e284afc521c2084d37c5c1fdc087661",
-		"authedAt": "2026-11-09T16:16:26.525571969+05:00"
+		"authedAt": "2026-11-12T12:16:08.538348611+05:00"
 	},
 	"cache": {
 		"ttl": "3h"

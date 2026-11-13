@@ -1,0 +1,40 @@
+# Copy this trusted Bash file to deploy/deploy.conf and edit it.
+SERVERS=(sakko meln)
+
+# Keep the application directory itself in place. Only these three entries switch.
+REMOTE_APP_DIR=/home/andrey/www/www.katren.org/htdocs/pronogti
+REMOTE_RELEASES_DIR=/home/andrey/www/www.katren.org/pronogti-deploy/releases
+REMOTE_BACKEND_PATH="$REMOTE_APP_DIR/pronogti"
+REMOTE_ADMIN_PATH="$REMOTE_APP_DIR/admin"
+REMOTE_KIOSK_PATH="$REMOTE_APP_DIR/dist"
+REMOTE_MIGRATIONS_PATH="$REMOTE_APP_DIR/migrations"
+REMOTE_CONFIG_FILE="$REMOTE_APP_DIR/config.json"
+
+# Set this to the name of your installed service.
+BACKEND_UNIT=pronogti.service
+SYSTEMCTL_MODE=sudo
+DEPLOY_GOARCH=amd64
+# /salons is an existing public, database-backed endpoint. Adjust the port,
+# or set an empty value to check systemd state without an HTTP request.
+BACKEND_HEALTH_URL=http://127.0.0.1:59000/salons
+
+# Migrations run once on the first server, against the primary database.
+# MIGRATION_HOST=sakko
+MIGRATE_BIN=migrate
+# By default read database.primary from REMOTE_CONFIG_FILE (requires Python 3).
+# If your JSON references environment variables, optionally source a remote
+# trusted Bash file defining DB_CONN or the variable named by primary_env.
+# This file is optional: no separate .env file is required for inline JSON URLs.
+REMOTE_DB_ENV_FILE=
+
+ADMIN_DIR=/home/andrey/www/dronm-workspace/apps/pronogti-admin
+ADMIN_DIST_DIR=dist
+ADMIN_BUILD_CMD=(npm run build -- --base=/admin/)
+
+# Required: the actual kiosk/customer Vue project, not the Go backend directory.
+KIOSK_DIR=
+KIOSK_DIST_DIR=dist
+KIOSK_BUILD_CMD=(npm run build -- --base=/)
+
+# --skip-build uses this existing executable instead of running make prod.
+BACKEND_BINARY=pronogti
