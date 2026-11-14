@@ -26,22 +26,23 @@ type Config struct {
 	mu       sync.Mutex
 	fileName string
 
-	HTTP               HTTPConfig         `json:"http"`
-	Database           DatabaseConfig     `json:"database"`
-	Session            SessionConfig      `json:"session"`
-	Admin              AdminConfig        `json:"admin"`
-	Checkout           CheckoutConfig     `json:"checkout"`
-	Fiscal             FiscalConfig       `json:"fiscal"`
-	Payments           PaymentsConfig     `json:"payments"`
-	ReceiptEmail       ReceiptEmailConfig `json:"receipt_email"`
-	Refunds            RefundsConfig      `json:"refunds"`
-	Settlement         SettlementConfig   `json:"settlement"`
-	CORS               CORSConfig         `json:"cors"`
-	Debug              DebugConfig        `json:"debug"`
-	YClients           YClients           `json:"yClients"`
-	Cache              CacheConfig        `json:"cache"`
-	ClientTimeoutValue string             `json:"client_timeout"`
-	ShutdownTimeout    string             `json:"shutdown_timeout"`
+	HTTP               HTTPConfig           `json:"http"`
+	Database           DatabaseConfig       `json:"database"`
+	Session            SessionConfig        `json:"session"`
+	Admin              AdminConfig          `json:"admin"`
+	Checkout           CheckoutConfig       `json:"checkout"`
+	Fiscal             FiscalConfig         `json:"fiscal"`
+	Payments           PaymentsConfig       `json:"payments"`
+	TerminalBridge     TerminalBridgeConfig `json:"terminal_bridge"`
+	ReceiptEmail       ReceiptEmailConfig   `json:"receipt_email"`
+	Refunds            RefundsConfig        `json:"refunds"`
+	Settlement         SettlementConfig     `json:"settlement"`
+	CORS               CORSConfig           `json:"cors"`
+	Debug              DebugConfig          `json:"debug"`
+	YClients           YClients             `json:"yClients"`
+	Cache              CacheConfig          `json:"cache"`
+	ClientTimeoutValue string               `json:"client_timeout"`
+	ShutdownTimeout    string               `json:"shutdown_timeout"`
 }
 
 type RefundsConfig struct {
@@ -233,13 +234,14 @@ func Load(path string) (*Config, error) {
 
 func defaultConfig() *Config {
 	return &Config{
-		Database:     DatabaseConfig{PrimaryEnv: "PRONOGTI_DATABASE_URL"},
-		Admin:        defaultAdminConfig(),
-		Checkout:     CheckoutConfig{MaxLifeTime: 900},
-		Fiscal:       FiscalConfig{WorkerEnabled: true, PollInterval: "2s"},
-		Payments:     PaymentsConfig{JWTKeyEnv: "PRONOGTI_PAYMENT_JWT_KEY", CreatingTimeoutSeconds: 120, WorkerEnabled: true, PollInterval: "2s", MockAutoPayAfter: "2s", WebhookPublicKeyEnv: "PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY"},
-		ReceiptEmail: ReceiptEmailConfig{SMTPPort: 587, SMTPTLSMode: "starttls", SMTPPasswordEnv: "PRONOGTI_RECEIPT_SMTP_PASSWORD", Timeout: "10s"},
-		Settlement:   SettlementConfig{WorkerEnabled: true, PollInterval: "2s"},
+		Database:       DatabaseConfig{PrimaryEnv: "PRONOGTI_DATABASE_URL"},
+		Admin:          defaultAdminConfig(),
+		Checkout:       CheckoutConfig{MaxLifeTime: 900},
+		Fiscal:         FiscalConfig{WorkerEnabled: true, PollInterval: "2s"},
+		Payments:       PaymentsConfig{JWTKeyEnv: "PRONOGTI_PAYMENT_JWT_KEY", CreatingTimeoutSeconds: 120, WorkerEnabled: true, PollInterval: "2s", MockAutoPayAfter: "2s", WebhookPublicKeyEnv: "PRONOGTI_TOCHKA_WEBHOOK_PUBLIC_KEY"},
+		TerminalBridge: DefaultTerminalBridgeConfig(),
+		ReceiptEmail:   ReceiptEmailConfig{SMTPPort: 587, SMTPTLSMode: "starttls", SMTPPasswordEnv: "PRONOGTI_RECEIPT_SMTP_PASSWORD", Timeout: "10s"},
+		Settlement:     SettlementConfig{WorkerEnabled: true, PollInterval: "2s"},
 		Session: SessionConfig{
 			Enabled: true, CookieName: "_pronogti_s", SameSite: "lax",
 			KioskCookieName: kiosk.DefaultDeviceCookieName, KioskCookieMaxAge: kiosk.MaxDeviceCookieAge,
@@ -389,6 +391,13 @@ func (c *Config) Validate() error {
 		return errors.New("checkout.max_life_time must be between 1 and 3600 seconds")
 	}
 	if err := c.Payments.Validate(); err != nil {
+		return err
+	}
+	writeTimeout, err := c.HTTPWriteTimeout()
+	if err != nil {
+		return err
+	}
+	if err := c.TerminalBridge.Validate(writeTimeout); err != nil {
 		return err
 	}
 	if err := c.ReceiptEmail.Validate(); err != nil {

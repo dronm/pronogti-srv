@@ -138,6 +138,16 @@ detail:
     - name: fiscal_error_code
       type: text
       nullable: true
+    - name: fiscal_error_message
+      type: text
+      nullable: true
+    - name: fiscal_response_payload
+      type: jsonb
+      goType: map[string]any
+      tsType: Record<string, unknown>
+      tsDtoType: Record<string, unknown>
+      valibot: AttrsSchema
+      nullable: true
     - name: yclients_completed_at
       type: timestamptz
       nullable: true

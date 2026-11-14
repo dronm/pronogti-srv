@@ -25,6 +25,9 @@ BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
 
 .PHONY: \
 	build \
+	build-fiscal-shift \
+	build-terminal \
+	close-fiscal-shifts \
 	run \
 	test \
 	test-race \
@@ -56,6 +59,19 @@ build:
 	@$(GO) -C "$(ROOT_DIR)" build \
 		-o "$(BUILD_OUTPUT)" \
 		"$(CMD_PATH)"
+
+# Build the standalone operator/cron command. Install it on the backend host.
+build-fiscal-shift:
+	@$(GO) -C "$(ROOT_DIR)" build -o "$(ROOT_DIR)pronogti-fiscal-shift" ./cmd/fiscal-shift
+
+# Provision Terminal Bridge agents/devices without sending any payment.
+build-terminal:
+	@$(GO) -C "$(ROOT_DIR)" build -o "$(ROOT_DIR)pronogti-terminal" ./cmd/terminal
+
+# Usage: make close-fiscal-shifts SHIFT_ARGS="-profile 1" (defaults to -all).
+SHIFT_ARGS ?= -all
+close-fiscal-shifts: build-fiscal-shift
+	@"$(ROOT_DIR)pronogti-fiscal-shift" -config "$(CONFIG_FILE)" $(SHIFT_ARGS)
 
 # Run the backend with the selected project configuration.
 run:

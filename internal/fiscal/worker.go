@@ -118,15 +118,15 @@ func (w *Worker) ProcessOne(ctx context.Context) (bool, error) {
 	if recovering {
 		// Changing deployment mode must not erase an uncertain physical outcome.
 		if !w.options.AllowLive {
-			return finish("unknown", nil, "live_reconciliation_disabled")
+			return finish("unknown", fiscalFailureResponse("live_reconciliation_disabled", "Live receipt reconciliation is disabled in the backend configuration."), "live_reconciliation_disabled")
 		}
 		if len(job.Payload) == 0 {
-			return finish("unknown", nil, "request_not_journaled")
+			return finish("unknown", fiscalFailureResponse("request_not_journaled", "The original receipt request was not saved; reconcile the device journal before retrying."), "request_not_journaled")
 		}
 	} else if len(job.Payload) == 0 {
 		payload, err := BuildPayloadWithContact(job.Order, job.Profile, job.CustomerContact)
 		if err != nil {
-			return finish("failed", nil, "receipt_validation_failed")
+			return finish("failed", fiscalFailureResponse("receipt_validation_failed", err.Error()), "receipt_validation_failed")
 		}
 		if err := w.repository.SavePayload(ctx, job, payload); err != nil {
 			return true, err
@@ -143,17 +143,17 @@ func (w *Worker) ProcessOne(ctx context.Context) (bool, error) {
 		token, present = os.LookupEnv(job.Profile.BearerTokenEnv)
 		if !present || token == "" {
 			if recovering {
-				return finish("unknown", nil, "receipt_token_unavailable")
+				return finish("unknown", fiscalFailureResponse("receipt_token_unavailable", "The configured receipt driver bearer token is unavailable."), "receipt_token_unavailable")
 			}
-			return finish("failed", nil, "receipt_token_unavailable")
+			return finish("failed", fiscalFailureResponse("receipt_token_unavailable", "The configured receipt driver bearer token is unavailable."), "receipt_token_unavailable")
 		}
 	}
 	config := DriverConfig{BaseURL: job.Profile.DriverBaseURL, DeviceID: job.Profile.DeviceID, Token: token, Timeout: time.Duration(job.Profile.TimeoutSeconds) * time.Second}
 	if _, err := validateDriverConfig(config, job.RequestID); err != nil {
 		if recovering {
-			return finish("unknown", nil, "receipt_configuration_invalid")
+			return finish("unknown", fiscalFailureResponse("receipt_configuration_invalid", err.Error()), "receipt_configuration_invalid")
 		}
-		return finish("failed", nil, "receipt_configuration_invalid")
+		return finish("failed", fiscalFailureResponse("receipt_configuration_invalid", err.Error()), "receipt_configuration_invalid")
 	}
 	var result DriverResult
 	if recovering {
@@ -165,10 +165,17 @@ func (w *Worker) ProcessOne(ctx context.Context) (bool, error) {
 		result, err = w.driver.Create(ctx, config, job.RequestID, job.Payload)
 	}
 	if err != nil {
+		if len(result.Response) == 0 {
+			code := result.ErrorCode
+			if code == "" {
+				code = "receipt_transport_uncertain"
+			}
+			result.Response = fiscalFailureResponse(code, err.Error())
+		}
 		if !recovering && result.State == "failed" {
 			return finish("failed", result.Response, result.ErrorCode)
 		}
-		return finish("unknown", nil, "receipt_transport_uncertain")
+		return finish("unknown", result.Response, "receipt_transport_uncertain")
 	}
 	switch result.State {
 	case "completed":
@@ -178,4 +185,14 @@ func (w *Worker) ProcessOne(ctx context.Context) (bool, error) {
 	default:
 		return finish("unknown", result.Response, result.ErrorCode)
 	}
+}
+
+// Local failures have no device envelope. Persist their explanation in the same
+// shape as a driver error so operator details do not stop at a machine code.
+func fiscalFailureResponse(code, message string) json.RawMessage {
+	response, _ := json.Marshal(map[string]any{
+		"source": "backend",
+		"error":  map[string]string{"code": code, "message": message},
+	})
+	return response
 }

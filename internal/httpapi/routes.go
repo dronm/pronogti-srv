@@ -15,6 +15,7 @@ func BuildRoutes() []webapp.Route {
 	addCustomerRoutes(customer, "Customer", "customer", "/session")
 
 	device := webapp.NewGroup("/kiosk", &routes)
+	device.POST("/fiscal/close-shift", webapp.WithName("kiosk.fiscal.closeShift"), webapp.WithService("Kiosk", "CloseKioskShift"), webapp.WithBinder(closeKioskShiftBinder))
 	device.POST("/session", webapp.WithName("kiosk.bind"), webapp.WithService("Kiosk", "BindKiosk"), webapp.WithBinder(bindKioskBinder))
 	device.GET("/session", webapp.WithName("kiosk.session"), webapp.WithService("Kiosk", "SessionInfo"))
 	// Keep existing kiosk callers working. The Kiosk service requires a valid
@@ -22,6 +23,8 @@ func BuildRoutes() []webapp.Route {
 	addCustomerRoutes(device, "Kiosk", "kiosk.customer", "/customer-session")
 	device.POST("/me/init-qr-pay", webapp.WithName("kiosk.customer.initQR.me"), webapp.WithService("Kiosk", "InitQRPayment"), webapp.WithBinder(kioskQRBinder))
 	device.POST("/me/init-card-pay", webapp.WithName("kiosk.customer.initCard.me"), webapp.WithService("Kiosk", "InitCardPayment"), webapp.WithBinder(kioskQRBinder))
+	device.POST("/init-terminal-pay", webapp.WithName("kiosk.customer.initTerminal"), webapp.WithService("Kiosk", "InitTerminalPayment"), webapp.WithBinder(kioskQRBinder))
+	device.POST("/me/init-terminal-pay", webapp.WithName("kiosk.customer.initTerminal.me"), webapp.WithService("Kiosk", "InitTerminalPayment"), webapp.WithBinder(kioskQRBinder))
 	device.GET("/me/payments/{id}", webapp.WithName("kiosk.customer.payment.me"), webapp.WithService("Kiosk", "GetPayment"), webapp.WithBinder(paymentGetBinder))
 	return routes
 }

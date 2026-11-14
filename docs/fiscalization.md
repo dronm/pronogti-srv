@@ -94,3 +94,11 @@ Frozen invalid receipt data requires explicit investigation; this command does
 not edit the checkout or rebuild its fiscal values.
 
 The integration creates sale receipts and sends the server-snapshotted customer contact to the driver when available. Refund receipts, specialized goods, independent delivery-service integration and shift-closing schedules are separate work.
+
+## Closing shifts
+
+The administrator can close a saved fiscal profile's shift; a bound kiosk has an
+operator-protected maintenance page at `/kiosk/close-shift`. The standalone
+`cmd/fiscal-shift` command and persistent cron wrapper support unattended closing
+of open shifts. See [shift closing](shift-closing.md) for deployment, permissions,
+timeouts, safe retry behavior, and scheduling examples.

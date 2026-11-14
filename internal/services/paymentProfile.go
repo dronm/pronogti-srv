@@ -88,12 +88,12 @@ func (s *PaymentProfileService) Create(
 		err = tx.QueryRow(ctx, `INSERT INTO public.payment_profiles
 			(company_id,name,environment,api_base_url,client_id,customer_code,sbp_merchant_id,account_id,
 			 qr_ttl_minutes,http_timeout_seconds,enabled,cards_enabled,acquiring_merchant_id,card_ttl_minutes,
-			 card_redirect_url,card_fail_redirect_url)
-			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16) RETURNING id`,
+			 card_redirect_url,card_fail_redirect_url,terminals_enabled)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) RETURNING id`,
 			item.CompanyID, item.Name, item.Environment, item.APIBaseURL, item.ClientID, item.CustomerCode,
 			item.SbpMerchantID, item.AccountID, item.QrTtlMinutes, item.HTTPTimeoutSeconds, item.Enabled,
 			item.CardsEnabled, item.AcquiringMerchantID, item.CardTtlMinutes, item.CardRedirectURL,
-			item.CardFailRedirectURL).Scan(&id)
+			item.CardFailRedirectURL, item.TerminalsEnabled).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("insert payment profile: %w", err)
 		}
@@ -154,7 +154,7 @@ func (s *PaymentProfileService) Update(
 		if err := validatePaymentProfile(&current.PaymentProfile, next, current.credentialConfigured); err != nil {
 			return err
 		}
-		if next.Enabled && !current.Enabled {
+		if next.Enabled && !current.Enabled && !terminalOnlyPaymentProfile(next) {
 			if err := verifyPaymentProfileCredential(ctx, tx, current.ID, current.CompanyID); err != nil {
 				return err
 			}
@@ -163,11 +163,12 @@ func (s *PaymentProfileService) Update(
 		_, err = tx.Exec(ctx, `UPDATE public.payment_profiles SET
 			name=$2, api_base_url=$3, client_id=$4, customer_code=$5, sbp_merchant_id=$6, account_id=$7,
 			qr_ttl_minutes=$8, http_timeout_seconds=$9, enabled=$10, cards_enabled=$11,
-			acquiring_merchant_id=$12, card_ttl_minutes=$13, card_redirect_url=$14, card_fail_redirect_url=$15
+			acquiring_merchant_id=$12, card_ttl_minutes=$13, card_redirect_url=$14, card_fail_redirect_url=$15,
+			terminals_enabled=$16
 			WHERE id=$1`, current.ID, next.Name, next.APIBaseURL, next.ClientID, next.CustomerCode,
 			next.SbpMerchantID, next.AccountID, next.QrTtlMinutes, next.HTTPTimeoutSeconds, next.Enabled,
 			next.CardsEnabled, next.AcquiringMerchantID, next.CardTtlMinutes, next.CardRedirectURL,
-			next.CardFailRedirectURL)
+			next.CardFailRedirectURL, next.TerminalsEnabled)
 		if err != nil {
 			return fmt.Errorf("update payment profile: %w", err)
 		}
@@ -301,13 +302,13 @@ func lockPaymentProfile(ctx context.Context, tx ds.Tx, id int64) (paymentProfile
 	p := &record.PaymentProfile
 	err := tx.QueryRow(ctx, `SELECT id,company_id,name,environment,api_base_url,client_id,
 		customer_code,sbp_merchant_id,account_id,qr_ttl_minutes,http_timeout_seconds,enabled,cards_enabled,
-		acquiring_merchant_id,card_ttl_minutes,card_redirect_url,card_fail_redirect_url,
+		acquiring_merchant_id,card_ttl_minutes,card_redirect_url,card_fail_redirect_url,terminals_enabled,
 		jwt_ciphertext IS NOT NULL OR jwt_env IS NOT NULL
 		FROM public.payment_profiles WHERE id=$1 FOR UPDATE`, id).Scan(
 		&p.ID, &p.CompanyID, &p.Name, &p.Environment, &p.APIBaseURL, &p.ClientID,
 		&p.CustomerCode, &p.SbpMerchantID, &p.AccountID, &p.QrTtlMinutes, &p.HTTPTimeoutSeconds,
 		&p.Enabled, &p.CardsEnabled, &p.AcquiringMerchantID, &p.CardTtlMinutes,
-		&p.CardRedirectURL, &p.CardFailRedirectURL, &record.credentialConfigured)
+		&p.CardRedirectURL, &p.CardFailRedirectURL, &p.TerminalsEnabled, &record.credentialConfigured)
 	if errors.Is(err, ds.ErrNoRows) {
 		return paymentProfileRecord{}, webapp.NotFound("payment profile not found", nil)
 	}
@@ -380,6 +381,9 @@ func mergePaymentProfile(item models.PaymentProfile, input modelbind.ModelInput[
 	if input.IsPresent("cards_enabled") {
 		item.CardsEnabled = patch.CardsEnabled
 	}
+	if input.IsPresent("terminals_enabled") {
+		item.TerminalsEnabled = patch.TerminalsEnabled
+	}
 	if input.IsPresent("acquiring_merchant_id") {
 		item.AcquiringMerchantID = normalizedProfileText(patch.AcquiringMerchantID)
 	}
@@ -422,6 +426,10 @@ var (
 	paymentAccountNumber       = regexp.MustCompile(`^[0-9]{20}$`)
 )
 
+func terminalOnlyPaymentProfile(item models.PaymentProfile) bool {
+	return item.TerminalsEnabled && !item.CardsEnabled && item.APIBaseURL == ""
+}
+
 func validatePaymentProfile(previous *models.PaymentProfile, item models.PaymentProfile, credentialConfigured bool) error {
 	fields := map[string]string{}
 	if item.CompanyID <= 0 {
@@ -434,8 +442,9 @@ func validatePaymentProfile(previous *models.PaymentProfile, item models.Payment
 		fields["environment"] = "Выберите среду."
 	}
 	activating := item.Enabled && (previous == nil || !previous.Enabled)
-	if (previous == nil || previous.APIBaseURL != item.APIBaseURL || activating) &&
-		!validAdminPaymentEndpoint(item.Environment, item.APIBaseURL) {
+	terminalOnly := terminalOnlyPaymentProfile(item)
+	if (previous == nil || previous.APIBaseURL != item.APIBaseURL || activating || item.APIBaseURL == "") &&
+		!terminalOnly && !validAdminPaymentEndpoint(item.Environment, item.APIBaseURL) {
 		fields["api_base_url"] = "Укажите разрешённый адрес API для выбранной среды."
 	}
 	if item.QrTtlMinutes < 1 || item.QrTtlMinutes > 129600 {
@@ -451,7 +460,7 @@ func validatePaymentProfile(previous *models.PaymentProfile, item models.Payment
 	if (item.CardsEnabled || acquirer != "") && !paymentAcquiringMerchantID.MatchString(acquirer) {
 		fields["acquiring_merchant_id"] = "Укажите 15-значный идентификатор эквайринга."
 	}
-	if item.Enabled {
+	if item.Enabled && !terminalOnly {
 		if !credentialConfigured {
 			fields["enabled"] = "Сначала сохраните токен Точки, затем включите профиль."
 		}

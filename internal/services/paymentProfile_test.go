@@ -123,3 +123,48 @@ func TestPaymentProfileEndpointsTrustTochkaAndLocalTestServers(t *testing.T) {
 		}
 	}
 }
+
+func TestTerminalOnlyPaymentProfileNeedsNoOnlineCredentials(t *testing.T) {
+	item := models.PaymentProfile{
+		CompanyID: 1, Name: "Physical terminal", Environment: models.PaymentProfileEnvironmentProduction,
+		Enabled: true, TerminalsEnabled: true, QrTtlMinutes: 15, HTTPTimeoutSeconds: 20, CardTtlMinutes: 15,
+	}
+	if err := validatePaymentProfile(nil, item, false); err != nil {
+		t.Fatalf("terminal-only activation unexpectedly requires online credentials: %v", err)
+	}
+	previous := item
+	item.TerminalsEnabled = false
+	if err := validatePaymentProfile(nil, item, false); err == nil {
+		t.Fatal("online profile accepted without API URL and credentials")
+	}
+	item.Enabled = false
+	if err := validatePaymentProfile(&previous, item, false); err == nil {
+		t.Fatal("removing terminal support must not retain an unconfigured online profile")
+	}
+	item.Enabled = true
+	item.TerminalsEnabled = true
+	item.APIBaseURL = paytochkabank.ProductionURL
+	if err := validatePaymentProfile(nil, item, false); err == nil {
+		t.Fatal("enabling terminals must not bypass credentials for a configured online profile")
+	}
+	item.APIBaseURL = ""
+	item.CardsEnabled = true
+	if err := validatePaymentProfile(nil, item, false); err == nil {
+		t.Fatal("terminal flag must not bypass hosted-card requirements")
+	}
+}
+
+func TestPaymentProfileTerminalPATCHPreservesOmittedFlag(t *testing.T) {
+	current := models.PaymentProfile{TerminalsEnabled: true}
+	for _, body := range []string{`{"name":"New"}`, `{"terminals_enabled":false}`} {
+		request := httptest.NewRequest("PATCH", "/", strings.NewReader(body))
+		input, err := modelbind.DecodeRequestInput[*models.PaymentProfile](request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		next := mergePaymentProfile(current, input)
+		if next.TerminalsEnabled != (body == `{"name":"New"}`) {
+			t.Fatal("terminal capability PATCH does not distinguish omission from false")
+		}
+	}
+}

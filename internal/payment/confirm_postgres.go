@@ -401,7 +401,7 @@ func (r *PostgresRepository) ReplayGenericEvents(ctx context.Context) error {
 const genericNotificationMatchesSQL = `SELECT p.payment_profile_id FROM public.payments p
 	WHERE p.method='sbp' AND p.profile_snapshot->>'customer_code'=$1 AND p.profile_snapshot->>'sbp_merchant_id'=$2
 	AND p.amount_kopecks=$3 AND p.currency='RUB'
-	AND (p.qrc_id=$4 OR (p.qrc_id IS NULL AND p.state IN ('creating','unknown') AND $5='Checkout '||p.order_id::text))
+	AND (p.qrc_id=$4 OR (p.qrc_id IS NULL AND p.state IN ('creating','unknown') AND ($5='Оплата '||p.order_id::text OR $5='Checkout '||p.order_id::text)))
 	ORDER BY p.id LIMIT 2`
 
 func (r *PostgresRepository) applyGenericEvent(ctx context.Context, key string) error {
@@ -517,7 +517,7 @@ func (r *PostgresRepository) applyVerifiedEvent(ctx context.Context, eventID int
 			profile.CustomerCode != message.CustomerCode || profile.SBPMerchantID != message.MerchantID || (a.QRCID != "" && a.QRCID != message.QRCID) {
 			return finishIgnoredEvent(ctx, tx, eventID, "payment_notification_mismatch")
 		}
-		if a.QRCID == "" && ((a.State != "creating" && a.State != "unknown") || message.Purpose != "Checkout "+a.OrderID) {
+		if a.QRCID == "" && ((a.State != "creating" && a.State != "unknown") || !matchesPaymentPurpose(message.Purpose, a.OrderID)) {
 			return finishIgnoredEvent(ctx, tx, eventID, "payment_registration_correlation_changed")
 		}
 		if message.RefTransactionID == "" && message.TransactionID == "" {
@@ -545,8 +545,8 @@ func notificationAttemptID(ctx context.Context, tx ds.Tx, profileID int64, envir
 	if len(ids) > 1 {
 		return "", nil
 	} // Ambiguous sandbox fixtures never select by amount.
-	orderID := strings.TrimPrefix(message.Purpose, "Checkout ")
-	if message.Purpose != "Checkout "+orderID || !confirmationUUID(orderID) {
+	orderID := paymentPurposeOrderID(message.Purpose)
+	if orderID == "" {
 		return "", nil
 	}
 	ids, err = notificationIDs(ctx, tx, `SELECT id::text FROM public.payments

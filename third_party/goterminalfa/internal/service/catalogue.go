@@ -228,6 +228,7 @@ func builtinCommands(now func() time.Time) []Command {
 			break
 		}
 	}
+	commands = append(commands, closeShiftCommand(commands))
 	commands = append(commands, operationCommand(commands))
 	return commands
 }

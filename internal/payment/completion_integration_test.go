@@ -30,6 +30,14 @@ import (
 // with permission to CREATE DATABASE; ordinary go test remains network-free.
 func completionTestDatabase(t *testing.T) (ds.Provider, *pgx.Conn) {
 	t.Helper()
+	return completionTestDatabaseThrough(t, 0)
+}
+
+// completionTestDatabaseThrough isolates historical migration roundtrips from
+// later dependent views and features. A zero limit retains the normal fixture
+// behavior of applying every current migration for application integration tests.
+func completionTestDatabaseThrough(t *testing.T, maxMigration int) (ds.Provider, *pgx.Conn) {
+	t.Helper()
 	value := os.Getenv("PRONOGTI_TEST_DATABASE_URL")
 	if value == "" {
 		t.Skip("set PRONOGTI_TEST_DATABASE_URL to an isolated local PostgreSQL server")
@@ -64,6 +72,15 @@ func completionTestDatabase(t *testing.T) (ds.Provider, *pgx.Conn) {
 		t.Fatalf("migration inventory: %d, %v", len(files), err)
 	}
 	for _, file := range files {
+		if maxMigration > 0 {
+			sequence, err := strconv.Atoi(strings.SplitN(filepath.Base(file), "_", 2)[0])
+			if err != nil {
+				t.Fatalf("invalid migration filename %s: %v", filepath.Base(file), err)
+			}
+			if sequence > maxMigration {
+				continue
+			}
+		}
 		body, err := os.ReadFile(file)
 		if err != nil {
 			t.Fatal(err)
@@ -318,6 +335,14 @@ func TestCompletionIntegrationWebhookIsolationAndClaimRecovery(t *testing.T) {
 }
 
 func TestCompletionIntegrationEarlyWebhookAndProfileIsolation(t *testing.T) {
+	for _, prefix := range []string{"Оплата ", "Checkout "} {
+		t.Run(strings.TrimSpace(prefix), func(t *testing.T) {
+			testCompletionEarlyWebhookAndProfileIsolation(t, prefix)
+		})
+	}
+}
+
+func testCompletionEarlyWebhookAndProfileIsolation(t *testing.T, prefix string) {
 	provider, conn := completionTestDatabase(t)
 	ctx := context.Background()
 	profileA := completionProfile(t, conn, 781898, "production")
@@ -338,7 +363,7 @@ func TestCompletionIntegrationEarlyWebhookAndProfileIsolation(t *testing.T) {
 	}
 	message := VerifiedSBPNotification{EventKey: "before-qr-result", CustomerCode: "customer-781898", MerchantID: "merchant-781898", QRCID: "native-production-qr-A",
 		TransactionID: "native-bank-operation-A", RefTransactionID: "native-bank-reference-A", PaymentType: "sbpPayment", AmountKopecks: 12345,
-		Purpose: "Checkout " + orderA.ID, Payload: json.RawMessage(`{"source":"early_verified_callback"}`)}
+		Purpose: prefix + orderA.ID, Payload: json.RawMessage(`{"source":"early_verified_callback"}`)}
 	if err := repository.Receive(ctx, profileB, message); err != nil {
 		t.Fatal(err)
 	}
@@ -454,7 +479,9 @@ func TestCompletionIntegrationFiscalClaimRecovery(t *testing.T) {
 }
 
 func TestCompletionIntegrationAtomicEnqueueAndMigrationRoundTrip(t *testing.T) {
-	provider, conn := completionTestDatabase(t)
+	// Test migrations 8/9 at their historical schema boundary. Newer admin views
+	// legitimately depend on their columns and must not be dropped with CASCADE.
+	provider, conn := completionTestDatabaseThrough(t, 9)
 	ctx := context.Background()
 	completionProfile(t, conn, 781898, "mock")
 	actor := checkout.Actor{CompanyID: 781898, Mode: "public", ClientID: 42, ScopeID: "scope-native", CustomerSessionID: "customer-native"}
@@ -501,6 +528,10 @@ func TestCompletionIntegrationAtomicEnqueueAndMigrationRoundTrip(t *testing.T) {
 	}
 	if err := conn.QueryRow(ctx, `SELECT count(*) FROM public.yclients_jobs WHERE order_id=$1`, order.ID).Scan(&crmCount); err != nil || crmCount != 1 {
 		t.Fatalf("paid migration backfill: count=%d error=%v", crmCount, err)
+	}
+	if err := conn.QueryRow(ctx, `SELECT o.state,p.state,(SELECT count(*) FROM public.fiscal_receipts WHERE order_id=o.id)
+		FROM public.payment_orders o JOIN public.payments p ON p.order_id=o.id WHERE p.id=$1`, view.PaymentID).Scan(&orderState, &paymentState, &receiptCount); err != nil || orderState != "paid" || paymentState != "paid" || receiptCount != 1 {
+		t.Fatalf("migration roundtrip changed paid records or receipt identity: order=%s payment=%s receipts=%d error=%v", orderState, paymentState, receiptCount, err)
 	}
 }
 

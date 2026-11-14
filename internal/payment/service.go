@@ -45,6 +45,9 @@ func (s *Service) initMethod(ctx context.Context, actor checkout.Actor, key, ord
 	if err := s.ready(ctx, actor); err != nil {
 		return View{}, err
 	}
+	if method == MethodSBP && s.dependencies.Bank == nil {
+		return View{}, fmt.Errorf("QR payments are not configured")
+	}
 	cardRepository, cardSupported := s.dependencies.Repository.(CardRepository)
 	if method == MethodCard && (s.dependencies.CardBank == nil || !cardSupported) || method == MethodSBP && s.dependencies.Bank == nil {
 		return View{}, fmt.Errorf("%s payments are not configured", method)
@@ -146,7 +149,7 @@ func (s *Service) initMethod(ctx context.Context, actor checkout.Actor, key, ord
 	bankCtx, cancelBank := context.WithTimeout(context.WithoutCancel(ctx), timeout)
 	request := BankRequest{
 		AttemptID: attempt.ID, OrderID: order.ID, Profile: reservation.Profile, Token: token,
-		AmountKopecks: attempt.AmountKopecks, Purpose: "Checkout " + order.ID,
+		AmountKopecks: attempt.AmountKopecks, Purpose: paymentPurpose(order.ID),
 		TTLMinutes: remaining, StartedAt: now,
 	}
 	var qrResult QRResult
@@ -202,7 +205,8 @@ func (s *Service) Get(ctx context.Context, actor checkout.Actor, id string) (Vie
 		return View{}, err
 	}
 	now := s.now().UTC()
-	if attempt.State == "creating" {
+	online := methodFor(attempt) == MethodSBP || methodFor(attempt) == MethodCard
+	if online && attempt.State == "creating" {
 		wait := s.dependencies.CreatingTimeout
 		var profile Profile
 		if json.Unmarshal(attempt.ProfileSnapshot, &profile) == nil {
@@ -218,7 +222,7 @@ func (s *Service) Get(ctx context.Context, actor checkout.Actor, id string) (Vie
 			}
 		}
 	}
-	if attempt.State == "pending" && attempt.ExpiresAt != nil && !attempt.ExpiresAt.After(now) {
+	if online && attempt.State == "pending" && attempt.ExpiresAt != nil && !attempt.ExpiresAt.After(now) {
 		attempt, err = s.dependencies.Repository.UpdateExpired(ctx, attempt.ID, now)
 		if err != nil {
 			return View{}, err
@@ -262,7 +266,7 @@ func (s *Service) ready(ctx context.Context, actor checkout.Actor) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
-	if s.dependencies.Repository == nil || s.dependencies.Bank == nil && s.dependencies.CardBank == nil {
+	if s.dependencies.Repository == nil {
 		return fmt.Errorf("payments are not configured")
 	}
 	if actor.CompanyID <= 0 || actor.ScopeID == "" || actor.CustomerSessionID == "" ||
@@ -306,6 +310,11 @@ func viewFor(attempt Attempt, now time.Time) View {
 	}
 	if attempt.State == "failed" {
 		result.OrderState = "prepared"
+	}
+	if result.Method == MethodTerminalCard {
+		// Physical terminal state is owned by its command/event lifecycle. It
+		// never exposes a hosted checkout URL or QR payload.
+		return result
 	}
 	if attempt.State == "pending" && attempt.ExpiresAt != nil && attempt.ExpiresAt.After(now) {
 		if result.Method == MethodCard {

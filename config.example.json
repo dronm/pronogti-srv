@@ -78,5 +78,14 @@
 	"payments": {
 		"webhook_enabled": false,
 		"webhook_public_key": ""
+	},
+	"terminal_bridge": {
+		"enabled": false,
+		"allow_live": false,
+		"allow_simulated": false,
+		"command_ttl_seconds": 120,
+		"max_poll_seconds": 25,
+		"lease_seconds": 45,
+		"heartbeat_max_age_seconds": 60
 	}
 }

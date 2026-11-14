@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 	"time"
 )
@@ -43,5 +44,18 @@ func TestFiscalConfigurationSurvivesTokenRefresh(t *testing.T) {
 	}
 	if saved.Fiscal.WorkerEnabled || !saved.Fiscal.AllowLive || saved.Fiscal.PollInterval != "10s" {
 		t.Fatalf("fiscal config lost on token refresh: %+v", saved.Fiscal)
+	}
+}
+
+func TestShiftOperatorTokenValidation(t *testing.T) {
+	for _, value := range []string{"", "0123456789abcdef"} {
+		if err := (FiscalConfig{PollInterval: "2s", ShiftOperatorToken: value}).Validate(); err != nil {
+			t.Fatalf("valid shift operator token rejected: %v", err)
+		}
+	}
+	for _, value := range []string{"short", "0123456789abcde\n", strings.Repeat("a", 513)} {
+		if err := (FiscalConfig{PollInterval: "2s", ShiftOperatorToken: value}).Validate(); err == nil {
+			t.Fatal("invalid shift operator token accepted")
+		}
 	}
 }

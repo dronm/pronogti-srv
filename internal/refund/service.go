@@ -12,6 +12,7 @@ import (
 
 	"github.com/dronm/pronogti/internal/checkout"
 	"github.com/dronm/pronogti/internal/fiscal"
+	"github.com/dronm/pronogti/internal/payment"
 	"github.com/dronm/webapp"
 	"github.com/google/uuid"
 )
@@ -132,6 +133,10 @@ func (s *Service) Quote(ctx context.Context, paymentID string) (Quote, error) {
 		PaidKopecks: sale.Bank.AmountKopecks, Items: make([]QuoteLine, 0, len(sale.Items)),
 		Refunds: append([]Refund{}, refunds...),
 	}
+	if sale.Bank.Method == payment.MethodTerminalCard {
+		result.Reason = "terminal_refunds_unsupported"
+		return result, nil
+	}
 	for index, item := range sale.Items {
 		_, quantity, err := checkout.ParseQuantity(item.Quantity)
 		if err != nil {
@@ -193,6 +198,9 @@ func (s *Service) Get(ctx context.Context, paymentID, refundID string) (Refund, 
 }
 
 func (s *Service) ineligible(sale Sale, previous []Refund) string {
+	if sale.Bank.Method == payment.MethodTerminalCard {
+		return "terminal_refunds_unsupported"
+	}
 	if sale.PaymentState != "paid" || sale.OrderState != "paid" {
 		return "payment_not_paid"
 	}

@@ -70,7 +70,9 @@ fields:
 
   - name: api_base_url
     type: text
-    required: true
+    dbRequired: true
+    default: "''"
+    comment: Empty only for a profile accepting physical terminal payments without online acquiring.
 
   - name: jwt_env
     type: text
@@ -116,6 +118,12 @@ fields:
     required: true
     default: "false"
     comment: The existing database constraint requires an acquiring merchant ID when enabled.
+
+  - name: terminals_enabled
+    type: bool
+    dbRequired: true
+    default: "false"
+    comment: Accept physical terminal payments through an assigned Terminal Bridge agent.
 
   - name: acquiring_merchant_id
     type: text
@@ -199,6 +207,8 @@ list:
     - name: enabled
       type: bool
     - name: cards_enabled
+      type: bool
+    - name: terminals_enabled
       type: bool
     - name: acquiring_merchant_id
       type: text
@@ -296,6 +306,8 @@ frontend:
         label: Активен
       - field: cards_enabled
         label: Оплата картой
+      - field: terminals_enabled
+        label: Оплата банковским терминалом
       - field: acquiring_merchant_id
         label: ТСП эквайринга
         component: text
@@ -338,6 +350,8 @@ frontend:
         label: Активен
       - field: cards_enabled
         label: Оплата картой
+      - field: terminals_enabled
+        label: Банковский терминал
   routes:
     listName: paymentProfiles
     createName: paymentProfileCreate

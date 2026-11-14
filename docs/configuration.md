@@ -99,6 +99,8 @@ feature. Demo and sandbox receipts do not offer email delivery.
 
 ## Runtime settings
 
+Physical terminal integration is disabled by default. Its optional `terminal_bridge` JSON section controls enablement, live/simulated operation gates, command deadlines, delivery leases, long polling and heartbeat freshness. It has no environment-variable settings. When enabled, `http.write_timeout` must be at least `terminal_bridge.max_poll_seconds + 5` seconds; the shipped defaults are 25 seconds of polling and a 45-second lease. Agent credentials are provisioned and hashed in PostgreSQL. See [physical terminal payments](terminal-payments.md) for the complete section and deployment flow.
+
 YClients synchronization settings live in company-owned `yclients_profiles`, selected by `kiosks.yclients_profile_id` or `salons.default_yclients_profile_id`. The selected profile and receipt contact are frozen with the checkout. These settings are separate from the acquiring bank profile and Terminal FA profile. See [YClients settlement](yclients-settlement.md).
 
 Bank confirmation, YClients synchronization and receipt workers continue independently of customer logout or browser closure. Pronogti validates the webhook public key at startup when `payments.webhook_enabled` is `true`. The shared callback URL is `/payments/tochka/webhook`, with `/payments/tochka/webhook/PROFILE_ID` as an optional profile restriction. Both routes work without a Redis cookie or customer headers. Payment and receipt secrets are never substituted into responses.

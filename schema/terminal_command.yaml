@@ -1,0 +1,99 @@
+name: TerminalCommand
+comment: Read-only terminal command history. Audited resolution uses a handwritten endpoint, not CRUD updates.
+table:
+  schema: public
+  name: terminal_commands
+route: /admin/terminal-commands
+permissionPrefix: terminalCommand
+serviceName: AdminTerminalCommand
+sessionRequired: true
+crudNotifications: false
+service:
+  manualMethods: [list, detail]
+keys:
+  - name: id
+    pathName: command_id
+    type: text
+fields:
+  - name: id
+    type: text
+    primaryKey: true
+  - name: payment_id
+    type: text
+  - name: order_id
+    type: text
+  - name: company_id
+    type: bigint
+  - name: kiosk_id
+    type: bigint
+  - name: payment_profile_id
+    type: bigint
+  - name: agent_id
+    type: text
+  - name: device_id
+    type: bigint
+  - name: terminal_id
+    type: text
+  - name: bank_terminal_id
+    type: text
+  - name: physical_id
+    type: text
+  - name: environment
+    type: text
+  - name: state
+    type: text
+  - name: amount_kopecks
+    type: bigint
+  - name: currency
+    type: text
+  - name: expires_at
+    type: timestamptz
+  - name: first_claimed_at
+    type: timestamptz
+    nullable: true
+  - name: lease_until
+    type: timestamptz
+    nullable: true
+  - name: transaction_id
+    type: text
+    nullable: true
+  - name: rrn
+    type: text
+    nullable: true
+  - name: stan
+    type: text
+    nullable: true
+  - name: authorization_code
+    type: text
+    nullable: true
+  - name: response_code
+    type: text
+    nullable: true
+  - name: error_code
+    type: text
+    nullable: true
+  - name: error_message
+    type: text
+    nullable: true
+  - name: created_at
+    type: timestamptz
+  - name: updated_at
+    type: timestamptz
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: false
+frontend:
+  scaffold: false
+migration:
+  enabled: false
+test:
+  enabled: false

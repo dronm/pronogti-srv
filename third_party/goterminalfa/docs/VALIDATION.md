@@ -10,7 +10,7 @@ CGO_ENABLED=0 go build ./cmd/goterminalfa
 
 Normal builds use the pure-Go SQLite driver. Race detection has the Go toolchain's separate C compiler requirement.
 
-- The unchanged default base catalogue covers all 72 command codes listed in the base protocol: 68 implemented and four explicitly unavailable. The two application commands bring base discovery to 74 entries. The explicit FFD 1.2 catalogue contains 80 entries: 65 implemented wire commands, 12 explicitly unavailable entries, and three application commands, including FFD-only `createReceipt`.
+- The unchanged default base catalogue covers all 72 command codes listed in the base protocol: 68 implemented and four explicitly unavailable. The three application commands bring base discovery to 75 entries. The explicit FFD 1.2 catalogue contains 81 entries: 65 implemented wire commands, 12 explicitly unavailable entries, and four application commands, including FFD-only `createReceipt`.
 - Request/response tests cover each command group, positional and TLV/STLV data, CP866 byte lengths, exact integer and decimal values, calendar dates, conditional fields, repeated tags, historical response lengths, and the amendments in Appendix 10.
 - Workflow tests cover complete fiscal sequences, serial session ownership, per-device exclusivity, print-buffer consumption by receipt finalization, registration reason consistency, and bounded archive draining.
 - SQLite tests cover canonical request persistence, exact response replay, conflicts, concurrent duplicates, startup recovery, definite pre-execution failures, and unknown outcomes that cannot be automatically repeated.

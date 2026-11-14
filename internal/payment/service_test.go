@@ -210,7 +210,7 @@ func TestQRServiceConcurrentInitElectsOneBankCall(t *testing.T) {
 func TestQRServiceUsesReservedAmountAndDoesNotExposeCredentials(t *testing.T) {
 	s, repo, bank, actor, _ := qrFixture()
 	bank.create = func(ctx context.Context, request BankRequest) (QRResult, error) {
-		if request.AmountKopecks != 12345 || request.AttemptID == "" || !strings.Contains(request.Purpose, repo.order.ID) || request.TTLMinutes != 15 {
+		if request.AmountKopecks != 12345 || request.AttemptID == "" || request.Purpose != "Оплата "+repo.order.ID || request.TTLMinutes != 15 {
 			t.Fatalf("bank request=%+v", request)
 		}
 		return qrResult(request), nil

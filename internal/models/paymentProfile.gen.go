@@ -18,7 +18,8 @@ type PaymentProfile struct {
 	Name        string                    `json:"name" required:"true" maxLen:"200"`
 	Provider    string                    `json:"provider" required:"true" srvCalc:"true"`
 	Environment PaymentProfileEnvironment `json:"environment" required:"true" enum:"payment_profile_environment"`
-	APIBaseURL  string                    `json:"api_base_url" required:"true"`
+	// Empty only for a profile accepting physical terminal payments without online acquiring.
+	APIBaseURL string `json:"api_base_url"`
 	// Legacy deployment environment variable name for the JWT.
 	JwtEnv             *string `json:"jwt_env" srvCalc:"true"`
 	ClientID           *string `json:"client_id"`
@@ -29,7 +30,9 @@ type PaymentProfile struct {
 	HTTPTimeoutSeconds int     `json:"http_timeout_seconds" required:"true"`
 	Enabled            bool    `json:"enabled" required:"true"`
 	// The existing database constraint requires an acquiring merchant ID when enabled.
-	CardsEnabled        bool      `json:"cards_enabled" required:"true"`
+	CardsEnabled bool `json:"cards_enabled" required:"true"`
+	// Accept physical terminal payments through an assigned Terminal Bridge agent.
+	TerminalsEnabled    bool      `json:"terminals_enabled"`
 	AcquiringMerchantID *string   `json:"acquiring_merchant_id"`
 	CardTtlMinutes      int       `json:"card_ttl_minutes" required:"true"`
 	CardRedirectURL     *string   `json:"card_redirect_url" maxLen:"2083"`
@@ -67,6 +70,7 @@ type PaymentProfileList struct {
 	HTTPTimeoutSeconds  int                       `json:"http_timeout_seconds"`
 	Enabled             bool                      `json:"enabled"`
 	CardsEnabled        bool                      `json:"cards_enabled"`
+	TerminalsEnabled    bool                      `json:"terminals_enabled"`
 	AcquiringMerchantID *string                   `json:"acquiring_merchant_id"`
 	CardTtlMinutes      int                       `json:"card_ttl_minutes"`
 	CardRedirectURL     *string                   `json:"card_redirect_url"`

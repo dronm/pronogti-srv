@@ -266,7 +266,7 @@ func (r *PostgresRepository) Fail(ctx context.Context, id string, unknown bool, 
 }
 
 const expireAttemptSQL = `UPDATE public.payments SET state='expired'
-	WHERE id=$1 AND state='pending' AND (qrc_id IS NOT NULL OR acquiring_operation_id IS NOT NULL) AND expires_at<=$2`
+	WHERE id=$1 AND method IN ('sbp','card') AND state='pending' AND (qrc_id IS NOT NULL OR acquiring_operation_id IS NOT NULL) AND expires_at<=$2`
 
 func (r *PostgresRepository) UpdateExpired(ctx context.Context, id string, now time.Time) (Attempt, error) {
 	conn, release, err := r.connection(ctx)
@@ -283,7 +283,7 @@ func (r *PostgresRepository) UpdateExpired(ctx context.Context, id string, now t
 }
 
 const abandonAttemptSQL = `UPDATE public.payments SET state='unknown',error_details='{"code":"qr_creation_interrupted"}'::jsonb
-	WHERE id=$1 AND state='creating'
+	WHERE id=$1 AND method IN ('sbp','card') AND state='creating'
 	AND created_at <= $2::timestamptz - make_interval(secs => COALESCE((profile_snapshot->>'http_timeout_seconds')::integer,300)+30)`
 
 func (r *PostgresRepository) AbandonStale(ctx context.Context, id string, now time.Time) (Attempt, error) {

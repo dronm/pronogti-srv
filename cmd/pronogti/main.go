@@ -20,6 +20,7 @@ import (
 	"github.com/dronm/pronogti/internal/salon"
 	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/pronogti/internal/settlement"
+	"github.com/dronm/pronogti/internal/terminalbridge"
 	"github.com/dronm/webapp"
 	"github.com/dronm/webapp/database"
 	weblogger "github.com/dronm/webapp/logger"
@@ -101,6 +102,9 @@ func run() error {
 		}
 	}()
 	confirmationRepository := payment.NewPostgresRepository(db)
+	if cfg.TerminalBridge.Enabled {
+		workers.Start("terminal command expiry", terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)).RunExpiry)
+	}
 	webhook, err := configuredWebhook(cfg.Payments, func(ctx context.Context, profileID int64, notification payment.VerifiedSBPNotification) error {
 		if profileID == 0 {
 			return confirmationRepository.ReceiveAny(ctx, notification)
@@ -179,7 +183,8 @@ func run() error {
 		return err
 	}
 	defer closeAdministrator()
-	handler := httpapi.WithTochkaWebhook(httpapi.WithAdministrator(router, administrator), webhook)
+	handler := httpapi.WithTerminalBridge(httpapi.WithTochkaWebhook(httpapi.WithAdministrator(router, administrator), webhook),
+		httpapi.NewTerminalBridgeHandler(terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)), time.Duration(cfg.TerminalBridge.MaxPollSeconds)*time.Second))
 
 	readTimeout, err := cfg.HTTPReadTimeout()
 	if err != nil {

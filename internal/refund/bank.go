@@ -38,6 +38,9 @@ var (
 
 // Validate verifies the frozen sale identifiers needed by the refund endpoint.
 func (b SDKBank) Validate(sale BankPayment) error {
+	if sale.Method == payment.MethodTerminalCard {
+		return errors.New("physical terminal refunds are not supported by the internet-acquiring API")
+	}
 	profile := sale.Profile
 	if sale.PaymentID == "" || sale.AmountKopecks <= 0 || profile.ID <= 0 || profile.CompanyID <= 0 {
 		return errors.New("invalid refund payment identity")

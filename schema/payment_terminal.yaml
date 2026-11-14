@@ -1,0 +1,58 @@
+name: PaymentTerminal
+comment: Read-only metadata for manually registered immutable physical-terminal bindings.
+table:
+  schema: public
+  name: payment_terminals
+route: /admin/payment-terminals
+permissionPrefix: paymentTerminal
+serviceName: AdminPaymentTerminal
+sessionRequired: true
+crudNotifications: false
+service:
+  manualMethods: [list, detail]
+keys:
+  - name: id
+    pathName: id
+    type: bigint
+fields:
+  - name: id
+    type: bigint
+    primaryKey: true
+  - name: agent_id
+    type: text
+  - name: company_id
+    type: bigint
+  - name: kiosk_id
+    type: bigint
+  - name: payment_profile_id
+    type: bigint
+  - name: terminal_id
+    type: text
+  - name: bank_terminal_id
+    type: text
+  - name: physical_id
+    type: text
+  - name: enabled
+    type: bool
+  - name: created_at
+    type: timestamptz
+  - name: updated_at
+    type: timestamptz
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: false
+frontend:
+  scaffold: false
+migration:
+  enabled: false
+test:
+  enabled: false

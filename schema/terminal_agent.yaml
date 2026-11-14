@@ -1,0 +1,57 @@
+name: TerminalAgent
+comment: Read-only metadata for the manually administered Terminal Bridge agent catalogue. Never expose token_hash.
+table:
+  schema: public
+  name: terminal_agents
+route: /admin/terminal-agents
+permissionPrefix: terminalAgent
+serviceName: AdminTerminalAgent
+sessionRequired: true
+crudNotifications: false
+# Handwritten HTTP handlers own provisioning, token rotation and enablement.
+# The enabled read methods remain manual; write CRUD methods are disabled.
+service:
+  manualMethods: [list, detail]
+keys:
+  - name: id
+    pathName: agent_id
+    type: text
+fields:
+  - name: id
+    type: text
+    primaryKey: true
+  - name: company_id
+    type: bigint
+  - name: kiosk_id
+    type: bigint
+  - name: environment
+    type: text
+  - name: enabled
+    type: bool
+  - name: last_seen_at
+    type: timestamptz
+    nullable: true
+  - name: heartbeat
+    type: json
+  - name: created_at
+    type: timestamptz
+  - name: updated_at
+    type: timestamptz
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: false
+frontend:
+  scaffold: false
+migration:
+  enabled: false
+test:
+  enabled: false

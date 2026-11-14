@@ -14,6 +14,7 @@ import (
 	"github.com/dronm/pronogti/internal/httpapi"
 	"github.com/dronm/pronogti/internal/payment"
 	"github.com/dronm/pronogti/internal/refund"
+	"github.com/dronm/pronogti/internal/terminalbridge"
 	websession "github.com/dronm/webapp/session"
 )
 
@@ -45,7 +46,9 @@ func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgr
 		return nil, nil, err
 	}
 	options := httpapi.AdminHTTPOptions{
+		TerminalBridge: terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)),
 		AllowedOrigins: cfg.Admin.AllowedOrigins, RequestTimeout: requestTimeout,
+		Shifts:  fiscal.NewShiftService(fiscal.NewPostgresRepository(db), fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive),
 		Version: Version, Commit: Commit, BuildDate: BuildDate,
 		Navigation: adminnav.NewService(db), GeneratedRoutes: generated, GeneratedPermissions: permissions,
 	}

@@ -15,7 +15,7 @@ func TestFFD12CataloguePreservesBaseAndRejectsAmbiguousAndSupersededCommands(t *
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(ffd) != 80 {
+	if len(ffd) != 81 {
 		t.Fatalf("FFD catalogue has %d entries", len(ffd))
 	}
 	if _, err := BuiltinCommandsForProfile("invalid"); err == nil {

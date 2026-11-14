@@ -17,6 +17,7 @@ import (
 	"github.com/dronm/pronogti/internal/salon"
 	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/pronogti/internal/settlement"
+	"github.com/dronm/pronogti/internal/terminalbridge"
 )
 
 func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.Registry, db ds.Provider, paymentTokens *payment.EnvironmentTokens) (*services.YClientService, error) {
@@ -54,7 +55,10 @@ func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.
 	backend.SetPaidVisitLookup(settlements.HeldPaidVisits)
 	httpapi.ConfigurePaymentProfileCredentials(paymentTokens)
 	httpapi.RegisterServices(backend, registry, kiosk.Options{CustomerMaxLifeTime: cfg.Session.CustomerMaxLifeTime, CustomerMaxIdleTime: cfg.Session.CustomerMaxIdleTime, Salons: salons}, httpapi.CheckoutDependencies{
-		Provider: services.NewCheckoutProvider(backend), Repository: checkout.NewPostgresRepository(db), MaxLifeTime: cfg.Checkout.MaxLifeTime,
+		TerminalBridge:  terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)),
+		TerminalEnabled: cfg.TerminalBridge.Enabled,
+		Shifts:          &httpapi.ShiftDependencies{Service: fiscal.NewShiftService(fiscal.NewPostgresRepository(db), fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive), OperatorToken: cfg.Fiscal.ShiftOperatorToken},
+		Provider:        services.NewCheckoutProvider(backend), Repository: checkout.NewPostgresRepository(db), MaxLifeTime: cfg.Checkout.MaxLifeTime,
 		ValidateOrder: fiscal.NewPostgresRepository(db).ValidateCheckout,
 		Payment: &payment.Dependencies{
 			Repository:   payment.NewPostgresRepository(db),

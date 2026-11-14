@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	MethodSBP  = "sbp"
-	MethodCard = "card"
+	MethodSBP          = "sbp"
+	MethodCard         = "card"
+	MethodTerminalCard = "terminal_card"
 )
 
 type Profile struct {
@@ -31,6 +32,7 @@ type Profile struct {
 	HTTPTimeoutSeconds  int    `json:"http_timeout_seconds"`
 	Enabled             bool   `json:"enabled"`
 	CardsEnabled        bool   `json:"cards_enabled"`
+	TerminalsEnabled    bool   `json:"terminals_enabled"`
 	AcquiringMerchantID string `json:"acquiring_merchant_id"`
 	CardTTLMinutes      int    `json:"card_ttl_minutes"`
 	CardRedirectURL     string `json:"card_redirect_url"`
@@ -143,6 +145,9 @@ type View struct {
 	BankReference      string       `json:"bank_reference,omitempty"`
 	Method             string       `json:"method"`
 	CheckoutURL        string       `json:"checkout_url,omitempty"`
+	TerminalID         string       `json:"terminal_id,omitempty"`
+	CommandID          string       `json:"command_id,omitempty"`
+	CommandState       string       `json:"command_state,omitempty"`
 	Receipt            *ReceiptView `json:"receipt,omitempty"`
 	receiptEmailURL    string
 }

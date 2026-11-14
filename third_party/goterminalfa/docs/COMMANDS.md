@@ -1,12 +1,12 @@
 # Command index
 
-The default **base** catalogue exposes **74 entries**: **68 implemented base-protocol commands**, **four unavailable base-protocol entries**, and the two application commands **`executeOperation`** and **`syncDateTime`**. All **72 command entries listed in the supplied base protocol** are represented. The table below describes that default profile.
+The default **base** catalogue exposes **75 entries**: **68 implemented base-protocol commands**, **four unavailable base-protocol entries**, and the three application commands **`executeOperation`**, **`syncDateTime`**, and **`closeShiftIfOpen`**. All **72 command entries listed in the supplied base protocol** are represented. The table below describes that default profile.
 
 Read-only commands perform fresh device queries and are not journaled. State-changing commands require a `requestId`. **Operation** means the command must appear inside a complete `executeOperation`; **Direct** allows a standalone request. Unavailable entries return `501 command_unavailable` without device communication.
 
 Use `GET /api/v1/commands` for the current full definitions. [commands.json](commands.json) is an exported snapshot with all input/output schemas, TLV tags, exact types, enums, flags, preconditions, notes, and original Russian descriptions. [API.md](API.md) explains request formats and execution semantics.
 
-For a configured `ffd1.2` device, use `GET /api/v1/commands?deviceId=...` or the [commands-ffd12.json](commands-ffd12.json) export. Its 80 entries contain 65 implemented wire commands, 12 explicitly unavailable entries, and three application commands, including the FFD-only `createReceipt`. [FFD12.md](FFD12.md) contains the full supplement audit matrix, new `0x96`/`0x98`/`0xE4`/`0xE5`/`0xE6` definitions, inherited commands, and remaining scope limits. Do not use the base table as a substitute for that device's actual schemas.
+For a configured `ffd1.2` device, use `GET /api/v1/commands?deviceId=...` or the [commands-ffd12.json](commands-ffd12.json) export. Its 81 entries contain 65 implemented wire commands, 12 explicitly unavailable entries, and four application commands, including the FFD-only `createReceipt`. [FFD12.md](FFD12.md) contains the full supplement audit matrix, new `0x96`/`0x98`/`0xE4`/`0xE5`/`0xE6` definitions, inherited commands, and remaining scope limits. Do not use the base table as a substitute for that device's actual schemas.
 
 | Code | Canonical command | Category | Policy | Invocation | Protocol 01.05 page |
 | --- | --- | --- | --- | --- | --- |
@@ -89,9 +89,10 @@ For a configured `ffd1.2` device, use `GET /api/v1/commands?deviceId=...` or the
 | --- | --- | --- |
 | `executeOperation` | Ordered `commands` array | Executes a complete validated sequence under one device gate and one durable request ID; returns ordered results |
 | `syncDateTime` | Empty object `{}` | Samples the Go server's local clock after queue waiting and any configured identity verification, drops seconds, and writes `0x72`/TLV `30000`; returns the sent `dateTime` |
+| `closeShiftIfOpen` | Cashier and optional print suppression | Checks and closes only an open shift under one device gate; a closed shift succeeds without mutation |
 | `createReceipt` (FFD only) | Cashier, items, optional payment/additional data, calculation sign, and total | Checks shift state, conditionally opens a shift, creates the receipt, and reports any confirmed-document cleanup on failure |
 
-All application commands require a request ID and have no command byte of their own. `createReceipt` is registered only in the FFD profile and cannot be nested in `executeOperation`; the base catalogue remains unchanged. A batch containing only reads still has operation-level persistence. Repeating a completed `syncDateTime` request ID replays its saved timestamp rather than synchronizing again; use a new ID for each intended synchronization. Its timezone is the Go server process's local timezone, which can be set with `TZ`; no automatic schedule is created.
+All application commands require a request ID and have no command byte of their own. `createReceipt` is registered only in the FFD profile. `createReceipt` and `closeShiftIfOpen` cannot be nested in `executeOperation`. A batch containing only reads still has operation-level persistence. Repeating a completed `syncDateTime` request ID replays its saved timestamp rather than synchronizing again; use a new ID for each intended synchronization. Its timezone is the Go server process's local timezone, which can be set with `TZ`; no automatic schedule is created.
 
 Every protocol command accepts its registered numeric alias, for example `0x03`, and lettered hexadecimal aliases such as `0x2B`/`0x2b`. `getSerialNumber` additionally accepts `ID`.
 

@@ -334,17 +334,21 @@ func (s *Service) Execute(ctx context.Context, req Request) Reply {
 		var notSent *terminalfa.CommandNotSentError
 		var receiptFailure *createReceiptError
 		hasReceiptFailure := errors.As(execErr, &receiptFailure)
+		var shiftFailure *closeShiftError
+		hasShiftFailure := errors.As(execErr, &shiftFailure)
 		unknown := false
 		if hasReceiptFailure {
 			// A receipt may have failed definitively after confirmed cleanup, or
 			// may remain uncertain despite a later cancellation acknowledgement.
 			// Its explicit outcome takes precedence over generic error chains.
 			unknown = receiptFailure.Unknown
+		} else if hasShiftFailure {
+			unknown = shiftFailure.Unknown
 		} else {
 			unknown = execErr != nil && !errors.As(execErr, &rejection) && !errors.As(execErr, &notExecuted) && !errors.As(execErr, &notSent)
 		}
 		if unknown || response.HTTPStatus == 500 {
-			if hasReceiptFailure && receiptFailure.Unknown && response.HTTPStatus != 500 {
+			if (hasReceiptFailure && receiptFailure.Unknown || hasShiftFailure && shiftFailure.Unknown) && response.HTTPStatus != 500 {
 				if err := s.journal.MarkUnknownWithResponse(persistCtx, req.DeviceID, req.RequestID, response.Body); err != nil {
 					s.logger.WithError(err).Error("persist receipt unknown outcome failed; claim retained")
 					return unknownReply(req)
@@ -422,12 +426,15 @@ func (e *IdentityError) Error() string {
 
 func executionFailure(req Request, err error) Reply {
 	var receiptFailure *createReceiptError
+	var shiftFailure *closeShiftError
 	var rejection *protocol.DeviceError
 	var identity *IdentityError
 	var serial *terminalfa.InvalidSerialError
 	switch {
 	case errors.As(err, &receiptFailure):
 		return createReceiptFailure(req, receiptFailure)
+	case errors.As(err, &shiftFailure):
+		return closeShiftFailure(req, shiftFailure)
 	case errors.As(err, &rejection):
 		return JSONReply(502, Response{DeviceID: req.DeviceID, Command: req.Command, RequestID: req.RequestID,
 			Status: "failed", Error: &Error{Code: "device_error", Message: err.Error(), DeviceCode: &rejection.Code}})

@@ -19,7 +19,7 @@ func BuiltinCommandsForProfile(profile string) ([]Command, error) {
 	var applications []Command
 	for _, cmd := range base {
 		if cmd.Definition.ProtocolCode == "" {
-			if cmd.Definition.Name != "executeOperation" {
+			if cmd.Definition.Name != "executeOperation" && cmd.Definition.Name != "closeShiftIfOpen" {
 				applications = append(applications, cmd)
 			}
 			continue
@@ -72,6 +72,9 @@ func BuiltinCommandsForProfile(profile string) ([]Command, error) {
 		commands = append(commands, cmd)
 	}
 	commands = append(commands, createReceiptCommand(commands))
+	closing := closeShiftCommand(commands)
+	closing.Definition.ProtocolProfile = profile
+	commands = append(commands, closing)
 	operation := operationCommand(commands)
 	operation.Definition.ProtocolProfile = profile
 	commands = append(commands, operation)

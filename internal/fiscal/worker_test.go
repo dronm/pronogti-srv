@@ -383,3 +383,43 @@ func TestWorkerDefiniteDriverFailureAndRepositoryErrors(t *testing.T) {
 		t.Fatalf("outcome persistence failure was hidden: %v %v", worked, err)
 	}
 }
+
+func TestWorkerPreservesDriverDiagnosticsForUncertainOutcomes(t *testing.T) {
+	response := json.RawMessage(`{"status":"unknown","error":{"code":"outcome_unknown","message":"Review required"},"data":{"failure":{"code":"device_error","message":"Original device failure"}}}`)
+	for _, previousState := range []string{"pending", "unknown"} {
+		t.Run(previousState, func(t *testing.T) {
+			job := liveJob()
+			job.PreviousState = previousState
+			if previousState == "unknown" {
+				job.Payload = json.RawMessage(`{"frozen":true}`)
+			}
+			repository := &workerRepository{jobs: []Job{job}}
+			driver := &workerDriver{result: DriverResult{State: "unknown", Response: response}, err: errDriverUncertain}
+			if worked, err := NewWorker(repository, driver, Options{AllowLive: true}).ProcessOne(context.Background()); err != nil || !worked {
+				t.Fatalf("uncertain response: %v %v", worked, err)
+			}
+			onlyFinish(t, repository, "unknown", "receipt_transport_uncertain")
+			if string(repository.finished[0].response) != string(response) {
+				t.Fatal("uncertain outcome discarded the driver's full diagnostic response")
+			}
+		})
+	}
+}
+
+func TestWorkerPersistsLocalValidationExplanation(t *testing.T) {
+	job := liveJob()
+	job.Order.Items = nil
+	repository := &workerRepository{jobs: []Job{job}}
+	if worked, err := NewWorker(repository, &workerDriver{}, Options{AllowLive: true}).ProcessOne(context.Background()); err != nil || !worked {
+		t.Fatalf("local validation: %v %v", worked, err)
+	}
+	onlyFinish(t, repository, "failed", "receipt_validation_failed")
+	var response struct {
+		Error struct {
+			Code, Message string
+		}
+	}
+	if err := json.Unmarshal(repository.finished[0].response, &response); err != nil || response.Error.Message == "" || response.Error.Code != "receipt_validation_failed" {
+		t.Fatalf("local failure omitted explanation: %s %v", repository.finished[0].response, err)
+	}
+}

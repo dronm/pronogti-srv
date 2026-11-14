@@ -1,5 +1,17 @@
 # Updating an existing installation
 
+## Physical terminal integration
+
+This version includes `000024_terminal_payments`. Apply every pending migration through it before starting the updated backend. Keep the latest payment/shift code from the supplied source; full fiscal errors, payment purpose text and shift handling remain in the existing payment completion flow.
+
+The integration remains disabled for existing deployments unless `terminal_bridge.enabled` is explicitly set to `true` in JSON. Its live and simulator gates are also false by default. Existing `card` payments continue to mean bank-hosted internet acquiring; physical acquiring uses `terminal_card`. Existing profiles are not silently enabled for terminals.
+
+Register the agent and physical device only after selecting a terminal-enabled company-owned profile. Keep the Windows application's journal and the backend's payment/command history. Terminal Bridge 0.1 supports the base financial protocol; install the recovery-capable 0.2 application before using operator resolution, so the original local journal acknowledges the backend's audited decision. Do not downgrade or roll back while terminal financial records exist; retain their original identity and audit trail.
+
+Agent APIs and manual administrator backend APIs are supplied. New catalogue YAML definitions are read-only metadata with frontend scaffolding disabled; rebuild or extend the Vue applications separately to expose terminal payment and operator controls. See [terminal payments](docs/terminal-payments.md).
+
+## Existing source upgrades
+
 Extract a release into a clean source directory and copy your local configuration
 into it. Extracting a ZIP over an older directory replaces files but does not
 remove files deleted by a later release.

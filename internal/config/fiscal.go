@@ -2,15 +2,17 @@ package config
 
 import (
 	"errors"
+	"strings"
 	"time"
 )
 
 // FiscalConfig controls the durable receipt worker. Live hardware requires an
 // explicit application switch in addition to a live profile and production pay.
 type FiscalConfig struct {
-	WorkerEnabled bool   `json:"worker_enabled"`
-	AllowLive     bool   `json:"allow_live"`
-	PollInterval  string `json:"poll_interval"`
+	ShiftOperatorToken string `json:"shift_operator_token,omitempty"`
+	WorkerEnabled      bool   `json:"worker_enabled"`
+	AllowLive          bool   `json:"allow_live"`
+	PollInterval       string `json:"poll_interval"`
 }
 
 func (c FiscalConfig) PollDuration() (time.Duration, error) {
@@ -18,6 +20,9 @@ func (c FiscalConfig) PollDuration() (time.Duration, error) {
 }
 
 func (c FiscalConfig) Validate() error {
+	if c.ShiftOperatorToken != "" && (len(c.ShiftOperatorToken) < 16 || len(c.ShiftOperatorToken) > 512 || strings.ContainsAny(c.ShiftOperatorToken, "\r\n")) {
+		return errors.New("fiscal.shift_operator_token must contain 16 to 512 bytes without line breaks")
+	}
 	duration, err := c.PollDuration()
 	if err != nil {
 		return err

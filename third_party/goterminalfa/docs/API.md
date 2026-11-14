@@ -313,3 +313,11 @@ Errors contain a machine `error.code`, a readable `error.message`, and, for a KK
 | `504` | `device_timeout` |
 
 `completed` means a successful decoded result; `failed` means a definite failure; `in_progress` and `unknown` describe journaled execution states. A full waiting queue or an expired waiting deadline starts no exchange. TCP dialing is bounded by `connectTimeout` and its whole connect/write/read exchange by `responseTimeout`, within the HTTP request deadline; cancellation interrupts network reads and writes. Serial cancellation interrupts response reads but cannot forcibly interrupt synchronous serial opening, configuration, or writes. Neither transport automatically retries commands or switches to the other transport after an error.
+
+## Close the shift only when open
+
+`closeShiftIfOpen` is available for both base and `ffd1.2` devices. It requires a durable `requestId` and accepts `cashierName`, optional twelve-digit `cashierInn`, and optional integer `suppressPrint` (`0` prints; `1` suppresses the report).
+
+The command checks `getShiftParameters` under the same device gate and physical session used for closing. A closed shift returns completed data `{"alreadyClosed":true,"shiftNumber":4}` without sending any closing commands. An open shift runs `startCloseShift`, `sendCashierData`, and `completeCloseShift`, returning `alreadyClosed:false`, `shiftNumber`, and the final fiscal result in `shiftResult`. The command cannot be nested in `executeOperation`.
+
+Use the same request ID when recovering a request with a lost HTTP response. An unknown outcome remains journaled and is never executed again under that request ID. Failure data preserves the failed stage, original device error, and any cancellation attempt. Cancellation is allowed only after this request confirmed opening the closing report, and does not turn a lost finalization response into a known outcome.
