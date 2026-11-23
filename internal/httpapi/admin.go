@@ -33,6 +33,8 @@ type AdminHTTPOptions struct {
 	Navigation                 AdminNavigation
 	Refunds                    AdminRefunds
 	Shifts                     FiscalShifts
+	KKT                        AdminKKT
+	Corrections                AdminCorrections
 	TerminalBridge             TerminalBridgeAdmin
 	GeneratedRoutes            http.Handler
 	GeneratedPermissions       []string
@@ -62,6 +64,8 @@ func NewAdminHandler(service AdminService, sessions *AdminSessions, options Admi
 	h.registerNavigation(mux)
 	h.registerRefunds(mux)
 	h.registerFiscalShifts(mux)
+	h.registerKKT(mux)
+	h.registerCorrections(mux)
 	h.registerTerminalBridge(mux)
 	if options.GeneratedRoutes != nil {
 		mux.Handle("/", options.GeneratedRoutes)
@@ -197,6 +201,9 @@ func (h *adminHandler) permissions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	permissions := append([]string{"admin.access"}, h.options.GeneratedPermissions...)
+	if h.options.Corrections != nil {
+		permissions = append(permissions, "fiscalCorrection.list", "fiscalCorrection.detail", "fiscalCorrection.create", "fiscalCorrection.resume")
+	}
 	if h.options.TerminalBridge != nil {
 		permissions = append(permissions, "terminalAgent.list", "terminalAgent.detail", "terminalAgent.create", "terminalAgent.update", "terminalAgent.rotateToken",
 			"paymentTerminal.list", "paymentTerminal.detail", "paymentTerminal.create", "paymentTerminal.update", "terminalCommand.list", "terminalCommand.detail", "terminalCommand.resolve")

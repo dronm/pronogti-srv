@@ -128,28 +128,29 @@ type Options struct {
 
 // View intentionally omits provider/credential identifiers and internal errors.
 type View struct {
-	PaymentID          string       `json:"payment_id"`
-	CheckoutID         string       `json:"checkout_id"`
-	State              string       `json:"state"`
-	AmountKopecks      int64        `json:"amount_kopecks"`
-	Currency           string       `json:"currency"`
-	Environment        string       `json:"environment"`
-	ExpiresAt          *time.Time   `json:"expires_at"`
-	Payload            string       `json:"payload,omitempty"`
-	QRImageURL         string       `json:"qr_image_url,omitempty"`
-	ErrorCode          string       `json:"error_code,omitempty"`
-	OrderState         string       `json:"order_state"`
-	YClientsSyncStatus string       `json:"yclients_sync_status"`
-	FiscalStatus       string       `json:"fiscal_status"`
-	PaidAt             *time.Time   `json:"paid_at,omitempty"`
-	BankReference      string       `json:"bank_reference,omitempty"`
-	Method             string       `json:"method"`
-	CheckoutURL        string       `json:"checkout_url,omitempty"`
-	TerminalID         string       `json:"terminal_id,omitempty"`
-	CommandID          string       `json:"command_id,omitempty"`
-	CommandState       string       `json:"command_state,omitempty"`
-	Receipt            *ReceiptView `json:"receipt,omitempty"`
-	receiptEmailURL    string
+	PaymentID                 string       `json:"payment_id"`
+	CheckoutID                string       `json:"checkout_id"`
+	State                     string       `json:"state"`
+	AmountKopecks             int64        `json:"amount_kopecks"`
+	Currency                  string       `json:"currency"`
+	Environment               string       `json:"environment"`
+	ExpiresAt                 *time.Time   `json:"expires_at"`
+	Payload                   string       `json:"payload,omitempty"`
+	QRImageURL                string       `json:"qr_image_url,omitempty"`
+	ErrorCode                 string       `json:"error_code,omitempty"`
+	OrderState                string       `json:"order_state"`
+	YClientsSyncStatus        string       `json:"yclients_sync_status"`
+	FiscalStatus              string       `json:"fiscal_status"`
+	PaidAt                    *time.Time   `json:"paid_at,omitempty"`
+	BankReference             string       `json:"bank_reference,omitempty"`
+	Method                    string       `json:"method"`
+	CheckoutURL               string       `json:"checkout_url,omitempty"`
+	TerminalID                string       `json:"terminal_id,omitempty"`
+	CommandID                 string       `json:"command_id,omitempty"`
+	CommandState              string       `json:"command_state,omitempty"`
+	TerminalResolutionPending bool         `json:"terminal_resolution_pending,omitempty"`
+	Receipt                   *ReceiptView `json:"receipt,omitempty"`
+	receiptEmailURL           string
 }
 
 // ReceiptView contains only checkout lines and public fiscal document details.

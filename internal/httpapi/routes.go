@@ -25,6 +25,8 @@ func BuildRoutes() []webapp.Route {
 	device.POST("/me/init-card-pay", webapp.WithName("kiosk.customer.initCard.me"), webapp.WithService("Kiosk", "InitCardPayment"), webapp.WithBinder(kioskQRBinder))
 	device.POST("/init-terminal-pay", webapp.WithName("kiosk.customer.initTerminal"), webapp.WithService("Kiosk", "InitTerminalPayment"), webapp.WithBinder(kioskQRBinder))
 	device.POST("/me/init-terminal-pay", webapp.WithName("kiosk.customer.initTerminal.me"), webapp.WithService("Kiosk", "InitTerminalPayment"), webapp.WithBinder(kioskQRBinder))
+	device.GET("/payment-methods", webapp.WithName("kiosk.customer.paymentMethods"), webapp.WithService("Kiosk", "PaymentMethods"), webapp.WithBinder(paymentMethodsBinder))
+	device.GET("/me/payment-methods", webapp.WithName("kiosk.customer.paymentMethods.me"), webapp.WithService("Kiosk", "PaymentMethods"), webapp.WithBinder(paymentMethodsBinder))
 	device.GET("/me/payments/{id}", webapp.WithName("kiosk.customer.payment.me"), webapp.WithService("Kiosk", "GetPayment"), webapp.WithBinder(paymentGetBinder))
 	return routes
 }

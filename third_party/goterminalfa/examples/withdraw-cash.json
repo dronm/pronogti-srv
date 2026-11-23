@@ -1,8 +1,0 @@
-{
-	"deviceId": "cashdesk-1",
-	"cmd": "withdrawCash",
-	"params": {
-		"amountKopecks": "1000"
-	},
-	"requestId": "withdraw-cash-001"
-}

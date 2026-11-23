@@ -1,0 +1,465 @@
+diff --git a/internal/correction/payload.go b/internal/correction/payload.go
+index a40dbbf..18dc257 100644
+--- a/internal/correction/payload.go
++++ b/internal/correction/payload.go
+@@ -76,6 +76,10 @@ func Build(source Source, request CreateRequest, now time.Time, location *time.L
+ 		return Preview{}, errors.New("У исходного чека отсутствуют подтверждённые фискальные реквизиты.")
+ 	}
+ 
++	// These profile attributes are frozen with the original receipt and are
++	// absent from the editable correction form.
++	request.Receipt.AdditionalData.AutomaticDeviceNumber = source.Payload.AdditionalData.AutomaticDeviceNumber
++	request.Receipt.AdditionalData.TimeZone = source.Payload.AdditionalData.TimeZone
+ 	reversal, replacement := cloneReceipt(source.Payload), cloneReceipt(request.Receipt)
+ 	if err := validateReceipt(&reversal, false); err != nil {
+ 		return Preview{}, fmt.Errorf("Невозможно воспроизвести исходный чек: %w", err)
+@@ -152,6 +156,12 @@ func validateReceipt(receipt *Receipt, replacement bool) error {
+ 	if err := validateINN(additional.CashierINN); err != nil {
+ 		return err
+ 	}
++	if additional.AutomaticDeviceNumber != "" && !fiscal.ValidAutomaticDeviceNumber(additional.AutomaticDeviceNumber) {
++		return errors.New("Укажите корректный номер автомата длиной до 20 символов в кодировке ККТ.")
++	}
++	if additional.TimeZone != nil && !fiscal.ValidReceiptTimeZone(*additional.TimeZone) {
++		return errors.New("Часовая зона должна быть от 1 до 11.")
++	}
+ 	if additional.InternetPayment != 0 && additional.InternetPayment != 1 {
+ 		return errors.New("Признак расчёта в интернете должен быть 0 или 1.")
+ 	}
+@@ -288,6 +298,7 @@ func cloneReceipt(value Receipt) Receipt {
+ 	}
+ 	value.SuppressShiftPrint = copyInt(value.SuppressShiftPrint)
+ 	value.PrintSuppressionCode = copyInt(value.PrintSuppressionCode)
++	value.AdditionalData.TimeZone = copyInt(value.AdditionalData.TimeZone)
+ 	value.Items = append([]Item(nil), value.Items...)
+ 	for index := range value.Items {
+ 		value.Items[index].Measure = copyInt(value.Items[index].Measure)
+diff --git a/internal/correction/payload_test.go b/internal/correction/payload_test.go
+index 59cd40b..78a48e7 100644
+--- a/internal/correction/payload_test.go
++++ b/internal/correction/payload_test.go
+@@ -36,9 +36,19 @@ var payloadNow = time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
+ 
+ func TestPayloadBuildPreservesOriginalFiscalDataAndDoesNotMutateInputs(t *testing.T) {
+ 	source := payloadSource()
++	zone := 4
++	source.Payload.AdditionalData.TimeZone = &zone
++	source.Payload.AdditionalData.AutomaticDeviceNumber = "0007"
++	originalJSON, _ := json.Marshal(source.Payload)
++	var err error
++	source.Payload, err = DecodeReceipt(originalJSON)
++	if err != nil {
++		t.Fatal(err)
++	}
+ 	request := payloadRequest(source)
+ 	request.Receipt.Payment.TaxSystem = 2
+-	originalJSON, _ := json.Marshal(source.Payload)
++	request.Receipt.AdditionalData.TimeZone = nil
++	request.Receipt.AdditionalData.AutomaticDeviceNumber = ""
+ 	requestJSON, _ := json.Marshal(request)
+ 	preview, err := Build(source, request, payloadNow, time.UTC)
+ 	if err != nil {
+@@ -51,6 +61,9 @@ func TestPayloadBuildPreservesOriginalFiscalDataAndDoesNotMutateInputs(t *testin
+ 		if receipt.AdditionalData.AdditionalReceiptProperty != "123456789" || receipt.AdditionalData.CorrectedCalculationDate != time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC).Unix() || receipt.Payment.CashlessKopecks != 10000 {
+ 			t.Fatalf("missing source link, date or explicit payment: %+v", receipt)
+ 		}
++		if receipt.AdditionalData.AutomaticDeviceNumber != "0007" || receipt.AdditionalData.TimeZone == nil || *receipt.AdditionalData.TimeZone != zone {
++			t.Fatalf("missing original settlement details: %+v", receipt.AdditionalData)
++		}
+ 	}
+ 	gotSourceJSON, _ := json.Marshal(source.Payload)
+ 	gotRequestJSON, _ := json.Marshal(request)
+diff --git a/internal/correction/types.go b/internal/correction/types.go
+index 229ffe8..b841f43 100644
+--- a/internal/correction/types.go
++++ b/internal/correction/types.go
+@@ -30,6 +30,8 @@ type AdditionalData struct {
+ 	CustomerContact           string `json:"customerContact,omitempty"`
+ 	SettlementAddress         string `json:"settlementAddress,omitempty"`
+ 	SettlementPlace           string `json:"settlementPlace,omitempty"`
++	AutomaticDeviceNumber     string `json:"automaticDeviceNumber,omitempty"`
++	TimeZone                  *int   `json:"timeZone,omitempty"`
+ 	InternetPayment           int    `json:"internetPayment"`
+ 	CorrectedCalculationDate  int64  `json:"correctedCalculationDate,omitempty"`
+ 	PrescriptionNumber        string `json:"prescriptionNumber,omitempty"`
+diff --git a/internal/fiscal/payload.go b/internal/fiscal/payload.go
+index e28cc54..ebbf23c 100644
+--- a/internal/fiscal/payload.go
++++ b/internal/fiscal/payload.go
+@@ -9,6 +9,7 @@ import (
+ 	"regexp"
+ 	"strconv"
+ 	"strings"
++	"unicode"
+ 
+ 	"github.com/dronm/pronogti/internal/checkout"
+ 	"golang.org/x/text/encoding/charmap"
+@@ -42,6 +43,11 @@ type Profile struct {
+ 	SettlementPlace   string `json:"settlement_place"`
+ 	InternetPayment   bool   `json:"internet_payment"`
+ 	SuppressPrint     bool   `json:"suppress_print"`
++
++	AutomaticDeviceNumber string `json:"automatic_device_number"`
++	TimeZone              *int   `json:"time_zone"`
++	// Nil identifies snapshots captured before the switch was added.
++	SendSettlementDetails *bool `json:"send_settlement_details,omitempty"`
+ }
+ 
+ func DefaultProfile(companyID int64) Profile {
+@@ -80,6 +86,16 @@ func ValidTimeoutSeconds(seconds int) bool {
+ 	return seconds >= 1 && seconds <= 300
+ }
+ 
++// ValidReceiptTimeZone checks the zone numbers in Article 5 of Federal Law No. 107-FZ.
++func ValidReceiptTimeZone(code int) bool {
++	return code >= 1 && code <= 11
++}
++
++// ValidAutomaticDeviceNumber checks a supplied FFD tag 1036 value.
++func ValidAutomaticDeviceNumber(value string) bool {
++	return strings.IndexFunc(value, unicode.IsControl) < 0 && receiptText("automatic device number", value, 20, true) == nil
++}
++
+ // Validate checks the supported unmarked-receipt configuration. Tax codes are
+ // explicit operator choices; this package does not infer them from the date.
+ func (p Profile) Validate() error {
+@@ -127,6 +143,12 @@ func (p Profile) Validate() error {
+ 	if err := receiptText("settlement place", p.SettlementPlace, 256, p.InternetPayment); err != nil {
+ 		return err
+ 	}
++	if p.AutomaticDeviceNumber != "" && !ValidAutomaticDeviceNumber(p.AutomaticDeviceNumber) {
++		return errors.New("fiscal automatic device number must contain 1 to 20 CP866 characters")
++	}
++	if p.TimeZone != nil && !ValidReceiptTimeZone(*p.TimeZone) {
++		return errors.New("fiscal time zone must be between 1 and 11")
++	}
+ 	return nil
+ }
+ 
+@@ -146,6 +168,9 @@ type receiptAdditional struct {
+ 	SettlementAddress string `json:"settlementAddress,omitempty"`
+ 	SettlementPlace   string `json:"settlementPlace,omitempty"`
+ 	InternetPayment   int    `json:"internetPayment"`
++
++	AutomaticDeviceNumber string `json:"automaticDeviceNumber,omitempty"`
++	TimeZone              *int   `json:"timeZone,omitempty"`
+ }
+ 
+ type receiptPayment struct {
+@@ -200,13 +225,20 @@ func BuildPayloadWithContact(order checkout.Order, profile Profile, customerCont
+ 	}
+ 	p := receiptPayload{
+ 		CashierName: profile.CashierName, CashierINN: profile.CashierINN,
+-		AdditionalData:  receiptAdditional{CashierName: profile.CashierName, CashierINN: profile.CashierINN, CustomerContact: customerContact, SettlementAddress: profile.SettlementAddress, SettlementPlace: profile.SettlementPlace},
++		AdditionalData:  receiptAdditional{CashierName: profile.CashierName, CashierINN: profile.CashierINN, CustomerContact: customerContact},
+ 		Payment:         receiptPayment{TaxSystem: profile.TaxSystem, CashlessKopecks: order.PayableKopecks},
+ 		CalculationSign: 1, TotalKopecks: order.PayableKopecks,
+ 		Items: make([]receiptItem, 0, len(order.Items)),
+ 	}
++	if profile.SendSettlementDetails == nil || *profile.SendSettlementDetails {
++		p.AdditionalData.SettlementAddress = profile.SettlementAddress
++		p.AdditionalData.SettlementPlace = profile.SettlementPlace
++		p.AdditionalData.AutomaticDeviceNumber = profile.AutomaticDeviceNumber
++		p.AdditionalData.TimeZone = profile.TimeZone
++	}
+ 	if profile.InternetPayment {
+ 		p.AdditionalData.InternetPayment = 1
++		p.AdditionalData.SettlementPlace = profile.SettlementPlace
+ 	}
+ 	if profile.SuppressPrint {
+ 		one, suppress := 1, 41029
+diff --git a/internal/fiscal/payload_test.go b/internal/fiscal/payload_test.go
+index f35f912..8a3ce7d 100644
+--- a/internal/fiscal/payload_test.go
++++ b/internal/fiscal/payload_test.go
+@@ -44,6 +44,46 @@ func TestBuildPayloadCashlessReceipt(t *testing.T) {
+ 	}
+ }
+ 
++func TestBuildPayloadSettlementDetails(t *testing.T) {
++	for _, tc := range []struct {
++		name      string
++		snapshot  string
++		wantExtra string
++	}{
++		{"enabled", `{"send_settlement_details":true,"automatic_device_number":"0007","time_zone":4}`,
++			`{"automaticDeviceNumber":"0007","cashierName":"Cashier","internetPayment":0,"settlementAddress":"Тюмень","settlementPlace":"https://salon.example","timeZone":4}`},
++		{"disabled", `{"send_settlement_details":false,"automatic_device_number":"0007","time_zone":4}`,
++			`{"cashierName":"Cashier","internetPayment":0}`},
++		{"internet payment", `{"send_settlement_details":false,"internet_payment":true}`,
++			`{"cashierName":"Cashier","internetPayment":1,"settlementPlace":"https://salon.example"}`},
++		{"legacy snapshot", `{}`,
++			`{"cashierName":"Cashier","internetPayment":0,"settlementAddress":"Тюмень","settlementPlace":"https://salon.example"}`},
++	} {
++		t.Run(tc.name, func(t *testing.T) {
++			profile := DefaultProfile(781898)
++			profile.SettlementAddress = "Тюмень"
++			profile.SettlementPlace = "https://salon.example"
++			if err := json.Unmarshal([]byte(tc.snapshot), &profile); err != nil {
++				t.Fatal(err)
++			}
++			payload, err := BuildPayload(receiptOrder(), profile)
++			if err != nil {
++				t.Fatal(err)
++			}
++			var receipt struct {
++				AdditionalData map[string]json.RawMessage `json:"additionalData"`
++			}
++			if err := json.Unmarshal(payload, &receipt); err != nil {
++				t.Fatal(err)
++			}
++			got, err := json.Marshal(receipt.AdditionalData)
++			if err != nil || string(got) != tc.wantExtra {
++				t.Fatalf("additionalData = %s, want %s: %v", got, tc.wantExtra, err)
++			}
++		})
++	}
++}
++
+ func TestBuildPayloadRoundedGoodsAmount(t *testing.T) {
+ 	order := receiptOrder()
+ 	order.Items[0].Kind = checkout.KindGood
+@@ -148,6 +188,9 @@ func TestProfileValidation(t *testing.T) {
+ 		{"nonnumeric INN", func(p *Profile) { p.CashierINN = "12345678901A" }},
+ 		{"website required", func(p *Profile) { p.InternetPayment = true }},
+ 		{"address too long", func(p *Profile) { p.SettlementAddress = strings.Repeat("Я", 257) }},
++		{"invalid time zone", func(p *Profile) { zone := 12; p.TimeZone = &zone }},
++		{"automatic device number too long", func(p *Profile) { p.AutomaticDeviceNumber = strings.Repeat("Я", 21) }},
++		{"unsupported automatic device number", func(p *Profile) { p.AutomaticDeviceNumber = "KKT\x00-1" }},
+ 	}
+ 	for _, tc := range cases {
+ 		t.Run(tc.name, func(t *testing.T) {
+diff --git a/internal/httpapi/admin_generated_integration_test.go b/internal/httpapi/admin_generated_integration_test.go
+index df55199..44fd78e 100644
+--- a/internal/httpapi/admin_generated_integration_test.go
++++ b/internal/httpapi/admin_generated_integration_test.go
+@@ -94,6 +94,44 @@ func generatedIntegrationSalon(t *testing.T, fixture generatedAdministratorInteg
+ 	return salon
+ }
+ 
++func TestGeneratedAdministratorFiscalReceiptDetails(t *testing.T) {
++	fixture := newGeneratedAdministratorIntegration(t)
++	const create = `{"company_id":781898,"name":"Receipt details","enabled":true,"mode":"demo",
++		"timeout_seconds":100,"cashier_name":"Cashier","tax_system":1,"service_vat_rate":6,
++		"good_vat_rate":6,"payment_method":4,"internet_payment":false,"suppress_print":false,
++		"settlement_address":"Тюмень","settlement_place":"Салон","automatic_device_number":"0007",
++		"time_zone":4,"send_settlement_details":true}`
++	response := adminRequest(fixture.handler, http.MethodPost, "/admin/fiscal-profiles", create, fixture.cookie, fixture.nonce)
++	var created models.FiscalProfile
++	if response.Code != http.StatusCreated || json.Unmarshal(response.Body.Bytes(), &created) != nil || created.ID <= 0 {
++		t.Fatalf("create fiscal profile: %d %s", response.Code, response.Body)
++	}
++	path := "/admin/fiscal-profiles/" + strconv.FormatInt(created.ID, 10)
++	get := func() models.FiscalProfile {
++		t.Helper()
++		response := adminRequest(fixture.handler, http.MethodGet, path, "", fixture.cookie, "")
++		var profile models.FiscalProfile
++		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &profile) != nil {
++			t.Fatalf("read fiscal profile: %d %s", response.Code, response.Body)
++		}
++		return profile
++	}
++	profile := get()
++	if !profile.SendSettlementDetails || profile.TimeZone == nil || *profile.TimeZone != 4 ||
++		profile.AutomaticDeviceNumber == nil || *profile.AutomaticDeviceNumber != "0007" {
++		t.Fatalf("receipt details did not round-trip: %+v", profile)
++	}
++	const clear = `{"automatic_device_number":null,"time_zone":null,"send_settlement_details":false}`
++	response = adminRequest(fixture.handler, http.MethodPatch, path, clear, fixture.cookie, fixture.nonce)
++	if response.Code != http.StatusOK {
++		t.Fatalf("clear fiscal receipt details: %d %s", response.Code, response.Body)
++	}
++	profile = get()
++	if profile.SendSettlementDetails || profile.TimeZone != nil || profile.AutomaticDeviceNumber != nil {
++		t.Fatalf("receipt details not cleared: %+v", profile)
++	}
++}
++
+ func TestGeneratedAdministratorIntegrationSalonCRUD(t *testing.T) {
+ 	fixture := newGeneratedAdministratorIntegration(t)
+ 	const companyID int64 = 880010
+diff --git a/internal/models/fiscalProfile.gen.go b/internal/models/fiscalProfile.gen.go
+index 0643928..234a5b1 100644
+--- a/internal/models/fiscalProfile.gen.go
++++ b/internal/models/fiscalProfile.gen.go
+@@ -34,13 +34,19 @@ type FiscalProfile struct {
+ 	// TerminalFA numeric VAT code for goods.
+ 	GoodVatRate int `json:"good_vat_rate" required:"true"`
+ 	// TerminalFA numeric settlement method code (FFD tag 1214).
+-	PaymentMethod     int       `json:"payment_method" required:"true"`
+-	SettlementAddress *string   `json:"settlement_address"`
+-	SettlementPlace   *string   `json:"settlement_place"`
+-	InternetPayment   bool      `json:"internet_payment" required:"true"`
+-	SuppressPrint     bool      `json:"suppress_print" required:"true"`
+-	CreatedAt         time.Time `json:"created_at" srvCalc:"true"`
+-	UpdatedAt         time.Time `json:"updated_at" srvCalc:"true"`
++	PaymentMethod     int     `json:"payment_method" required:"true"`
++	SettlementAddress *string `json:"settlement_address"`
++	SettlementPlace   *string `json:"settlement_place"`
++	// Automatic settlement device number (FFD tag 1036).
++	AutomaticDeviceNumber *string `json:"automatic_device_number" maxLen:"20"`
++	// Russian settlement time-zone code (FFD tag 1011).
++	TimeZone *int `json:"time_zone"`
++	// Send configured settlement details with each receipt.
++	SendSettlementDetails bool      `json:"send_settlement_details"`
++	InternetPayment       bool      `json:"internet_payment" required:"true"`
++	SuppressPrint         bool      `json:"suppress_print" required:"true"`
++	CreatedAt             time.Time `json:"created_at" srvCalc:"true"`
++	UpdatedAt             time.Time `json:"updated_at" srvCalc:"true"`
+ }
+ 
+ func (m FiscalProfile) Relation() string {
+diff --git a/internal/refund/fiscal_test.go b/internal/refund/fiscal_test.go
+index 3a0169c..0359272 100644
+--- a/internal/refund/fiscal_test.go
++++ b/internal/refund/fiscal_test.go
+@@ -36,6 +36,11 @@ func returnReceiptFixture(t *testing.T, profile fiscal.Profile) (json.RawMessage
+ func TestPrepareReturnReceiptPreservesOriginalFiscalFields(t *testing.T) {
+ 	profile := fiscal.DefaultProfile(1)
+ 	profile.ServiceVATRate, profile.GoodVATRate, profile.TaxSystem = 5, 6, 4
++	enabled, zone := true, 4
++	profile.SendSettlementDetails = &enabled
++	profile.TimeZone = &zone
++	profile.AutomaticDeviceNumber = "0007"
++	profile.SettlementAddress, profile.SettlementPlace = "Тюмень", "Салон"
+ 	salePayload, lines := returnReceiptFixture(t, profile)
+ 	returned, err := PrepareReturnReceipt(profile, "mock", "demo", salePayload, lines, 150, 350, false)
+ 	if err != nil {
+diff --git a/internal/services/fiscalProfile.go b/internal/services/fiscalProfile.go
+index 83bb91f..2880806 100644
+--- a/internal/services/fiscalProfile.go
++++ b/internal/services/fiscalProfile.go
+@@ -215,6 +215,12 @@ func validateFiscalProfileCodes(input modelbind.ModelInput[*models.FiscalProfile
+ 	if input.IsPresent("payment_method") && !fiscal.ValidPaymentMethod(p.PaymentMethod) {
+ 		fields["payment_method"] = "Выберите допустимый признак способа расчёта."
+ 	}
++	if input.IsPresent("time_zone") && p.TimeZone != nil && !fiscal.ValidReceiptTimeZone(*p.TimeZone) {
++		fields["time_zone"] = "Выберите часовую зону от 1 до 11."
++	}
++	if input.IsPresent("automatic_device_number") && p.AutomaticDeviceNumber != nil && !fiscal.ValidAutomaticDeviceNumber(*p.AutomaticDeviceNumber) {
++		fields["automatic_device_number"] = "Укажите номер автомата длиной до 20 символов в кодировке ККТ или оставьте поле пустым."
++	}
+ 	if len(fields) > 0 {
+ 		return webapp.BadRequest("Некорректные параметры фискального профиля.", map[string]any{
+ 			"field_errors": fields,
+diff --git a/internal/services/fiscalProfile_test.go b/internal/services/fiscalProfile_test.go
+index bdd0eb4..f187299 100644
+--- a/internal/services/fiscalProfile_test.go
++++ b/internal/services/fiscalProfile_test.go
+@@ -28,6 +28,8 @@ func TestValidateFiscalProfileCodes(t *testing.T) {
+ 		`{"name":"New name"}`,
+ 		`{"service_vat_rate":11,"good_vat_rate":12}`,
+ 		`{"tax_system":32,"payment_method":7,"timeout_seconds":100}`,
++		`{"time_zone":4,"automatic_device_number":"0004","send_settlement_details":true}`,
++		`{"time_zone":null,"automatic_device_number":null,"send_settlement_details":false}`,
+ 	} {
+ 		if err := validateFiscalProfileCodes(decode(body)); err != nil {
+ 			t.Fatalf("valid input %s rejected: %v", body, err)
+@@ -35,7 +37,7 @@ func TestValidateFiscalProfileCodes(t *testing.T) {
+ 	}
+ 
+ 	err := validateFiscalProfileCodes(decode(
+-		`{"tax_system":8,"service_vat_rate":0,"good_vat_rate":13,"payment_method":8,"timeout_seconds":301}`,
++		`{"tax_system":8,"service_vat_rate":0,"good_vat_rate":13,"payment_method":8,"timeout_seconds":301,"time_zone":12,"automatic_device_number":"💅"}`,
+ 	))
+ 	recorder := httptest.NewRecorder()
+ 	webapp.WriteServiceError(recorder, err)
+@@ -52,7 +54,7 @@ func TestValidateFiscalProfileCodes(t *testing.T) {
+ 	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+ 		t.Fatal(err)
+ 	}
+-	for _, field := range []string{"tax_system", "service_vat_rate", "good_vat_rate", "payment_method", "timeout_seconds"} {
++	for _, field := range []string{"tax_system", "service_vat_rate", "good_vat_rate", "payment_method", "timeout_seconds", "time_zone", "automatic_device_number"} {
+ 		if response.Error.Details.FieldErrors[field] == "" {
+ 			t.Errorf("missing validation error for %s", field)
+ 		}
+diff --git a/migrations/000026_fiscal_profile_receipt_details.down.sql b/migrations/000026_fiscal_profile_receipt_details.down.sql
+new file mode 100644
+index 0000000..6ed8d5a
+--- /dev/null
++++ b/migrations/000026_fiscal_profile_receipt_details.down.sql
+@@ -0,0 +1,8 @@
++BEGIN;
++
++ALTER TABLE public.fiscal_profiles
++	DROP COLUMN automatic_device_number,
++	DROP COLUMN time_zone,
++	DROP COLUMN send_settlement_details;
++
++COMMIT;
+diff --git a/migrations/000026_fiscal_profile_receipt_details.up.sql b/migrations/000026_fiscal_profile_receipt_details.up.sql
+new file mode 100644
+index 0000000..93d85f8
+--- /dev/null
++++ b/migrations/000026_fiscal_profile_receipt_details.up.sql
+@@ -0,0 +1,14 @@
++BEGIN;
++
++ALTER TABLE public.fiscal_profiles
++	ADD COLUMN automatic_device_number text CHECK (char_length(btrim(automatic_device_number)) BETWEEN 1 AND 20),
++	ADD COLUMN time_zone integer CHECK (time_zone BETWEEN 1 AND 11),
++	ADD COLUMN send_settlement_details boolean NOT NULL DEFAULT false;
++
++-- Profiles with an address or place already include those details on receipts.
++UPDATE public.fiscal_profiles
++SET send_settlement_details = true
++WHERE NULLIF(btrim(settlement_address), '') IS NOT NULL
++	OR NULLIF(btrim(settlement_place), '') IS NOT NULL;
++
++COMMIT;
+diff --git a/schema/fiscal_profile.yaml b/schema/fiscal_profile.yaml
+index eb4c7de..07fc7b8 100644
+--- a/schema/fiscal_profile.yaml
++++ b/schema/fiscal_profile.yaml
+@@ -146,6 +146,27 @@ fields:
+     type: text
+     nullable: true
+ 
++  - name: automatic_device_number
++    type: text
++    nullable: true
++    maxLen: 20
++    check: char_length(btrim(automatic_device_number)) BETWEEN 1 AND 20
++    comment: Automatic settlement device number (FFD tag 1036).
++    valibot: 'v.nullable(v.pipe(TextSchema, v.maxLength(20, "Номер автомата должен содержать не более 20 символов.")))'
++
++  - name: time_zone
++    type: int
++    nullable: true
++    check: time_zone BETWEEN 1 AND 11
++    comment: Russian settlement time-zone code (FFD tag 1011).
++    valibot: 'v.nullable(v.picklist(fiscalTimeZoneOptions.map(({ value }) => value), "Выберите часовую зону."))'
++
++  - name: send_settlement_details
++    type: bool
++    dbRequired: true
++    default: "false"
++    comment: Send configured settlement details with each receipt.
++
+   - name: internet_payment
+     type: bool
+     required: true
+@@ -282,7 +303,7 @@ frontend:
+   title: Фискальные профили
+   schemaImports:
+     - from: "@/forms/fiscalProfileOptions"
+-      names: [fiscalTaxSystemOptions, fiscalVatOptions, fiscalPaymentMethodOptions]
++      names: [fiscalTaxSystemOptions, fiscalVatOptions, fiscalPaymentMethodOptions, fiscalTimeZoneOptions]
+   # FiscalProfileForm.vue renders the company reference and the numeric selects.
+   form:
+     enabled: true
+@@ -342,6 +363,14 @@ frontend:
+       - field: settlement_place
+         label: Место расчётов
+         component: text
++      - field: automatic_device_number
++        label: Номер автомата
++        component: text
++      - field: time_zone
++        label: Часовая зона
++      - field: send_settlement_details
++        label: Передавать реквизиты расчёта в каждом чеке
++        default: false
+       - field: internet_payment
+         label: Расчёт в интернете
+       - field: suppress_print

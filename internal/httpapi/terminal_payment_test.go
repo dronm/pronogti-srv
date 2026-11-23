@@ -21,6 +21,23 @@ type terminalPaymentFixture struct {
 	afterPreflight       func()
 	id                   string
 	commandState         string
+	resolutionPending    bool
+}
+
+func (f *terminalPaymentFixture) Availability(ctx context.Context, owner checkout.Owner, id string) (terminalbridge.Availability, error) {
+	result := terminalbridge.Availability{TerminalCard: terminalbridge.TerminalAvailability{Configured: true, Available: true, Status: "ready", Environment: "mock"}}
+	if id != "" {
+		if _, err := f.payments.orders.Get(ctx, id); err != nil {
+			return result, err
+		}
+		if f.id != "" {
+			if _, err := f.ExistingAttempt(ctx, owner, id, "test"); err != nil {
+				return result, err
+			}
+			result.ActivePayment = &terminalbridge.ActivePayment{PaymentID: f.id, CheckoutID: id, Method: "terminal_card"}
+		}
+	}
+	return result, nil
 }
 
 func (f *terminalPaymentFixture) ExistingAttempt(ctx context.Context, owner checkout.Owner, id, key string) (string, error) {
@@ -48,7 +65,7 @@ func (f *terminalPaymentFixture) Initiate(ctx context.Context, owner checkout.Ow
 	return f.id, nil
 }
 func (f *terminalPaymentFixture) PaymentDetails(context.Context, string) (terminalbridge.TerminalDetails, error) {
-	return terminalbridge.TerminalDetails{CommandID: "16d7bdbd-03cd-451b-b001-e3713253824c", TerminalID: "terminal-1", State: f.commandState}, nil
+	return terminalbridge.TerminalDetails{CommandID: "16d7bdbd-03cd-451b-b001-e3713253824c", TerminalID: "terminal-1", State: f.commandState, ResolutionPending: f.resolutionPending}, nil
 }
 func (f *terminalPaymentFixture) ExpirePayment(context.Context, string) (bool, error) {
 	return false, nil
@@ -120,5 +137,121 @@ func TestTerminalHTTPRejectsOverridesAndChangedCustomerBeforeReservation(t *test
 	response := runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", `{"checkout_id":"`+order.ID+`"}`, current.Customer.SessionID, "key")
 	if response.Code != 401 || fixture.initiated != 0 {
 		t.Fatalf("changed customer initiated terminal: %d %s", response.Code, response.Body)
+	}
+}
+
+func TestTerminalHTTPAvailabilityRequiresKioskCustomerAndSupportsRecovery(t *testing.T) {
+	runtime, fixture, current, order := terminalPaymentRuntime(t)
+	path := "/kiosk/payment-methods?checkout_id=" + order.ID
+	for _, test := range []struct {
+		path, nonce string
+		status      int
+	}{
+		{path, "", 401},
+		{path, current.Customer.SessionID, 200},
+		{"/kiosk/me/payment-methods?checkout_id=" + order.ID, current.Customer.SessionID, 200},
+		{"/kiosk/payment-methods?checkout_id=one&checkout_id=two", current.Customer.SessionID, 400},
+		{"/kiosk/payment-methods?unexpected=1", current.Customer.SessionID, 400},
+		{"/customer/payment-methods", current.Customer.SessionID, 404},
+	} {
+		response := runtime.checkoutRequest(http.MethodGet, test.path, "", test.nonce, "")
+		if response.Code != test.status {
+			t.Fatalf("availability=%d %s expected=%d", response.Code, response.Body, test.status)
+		}
+	}
+	response := runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", `{"checkout_id":"`+order.ID+`"}`, current.Customer.SessionID, "terminal:"+order.ID)
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body)
+	}
+	response = runtime.checkoutRequest(http.MethodGet, path, "", current.Customer.SessionID, "")
+	var result terminalbridge.Availability
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &result) != nil || result.ActivePayment == nil || result.ActivePayment.PaymentID != fixture.id || result.ActivePayment.Method != "terminal_card" {
+		t.Fatal("owned recovery unavailable", response.Code, response.Body)
+	}
+	next := runtime.start(t, `{"guest":true}`)
+	response = runtime.checkoutRequest(http.MethodGet, path, "", next.Customer.SessionID, "")
+	if response.Code != 404 {
+		t.Fatal("next customer recovered old payment", response.Code, response.Body)
+	}
+}
+
+func TestTerminalHTTPExposesOnlyResolutionPendingFlag(t *testing.T) {
+	runtime, fixture, current, order := terminalPaymentRuntime(t)
+	response := runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", `{"checkout_id":"`+order.ID+`"}`, current.Customer.SessionID, "terminal:"+order.ID)
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body)
+	}
+	fixture.resolutionPending = true
+	response = runtime.checkoutRequest(http.MethodGet, "/kiosk/payments/"+fixture.id, "", current.Customer.SessionID, "")
+	var view payment.View
+	if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &view) != nil || !view.TerminalResolutionPending {
+		t.Fatal("resolution acknowledgement state missing", response.Code, response.Body)
+	}
+	var document map[string]any
+	if err := json.Unmarshal(response.Body.Bytes(), &document); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := document["error_message"]; ok {
+		t.Fatal("raw terminal errors exposed")
+	}
+}
+
+func terminalHTTPDependencies(t *testing.T, runtime *testRuntime) *CheckoutDependencies {
+	t.Helper()
+	definition, err := webapp.LookupService("Kiosk")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return definition.Factory(webapp.ServiceContext{Session: runtime.sess}).(*service).checkout
+}
+
+func TestTerminalHTTPDisabledFeatureStillRecoversPendingAndPaidAttempts(t *testing.T) {
+	runtime, fixture, current, order := terminalPaymentRuntime(t)
+	body := `{"checkout_id":"` + order.ID + `"}`
+	response := runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", body, current.Customer.SessionID, "terminal:"+order.ID)
+	if response.Code != 200 {
+		t.Fatal(response.Code, response.Body)
+	}
+	terminalHTTPDependencies(t, runtime).TerminalEnabled = false
+	fixture.failPreflight = true
+	for _, state := range []string{"pending", "paid"} {
+		attempt := fixture.payments.attempts[fixture.id]
+		attempt.State = state
+		fixture.payments.attempts[fixture.id] = attempt
+		if state == "paid" {
+			order.State = "paid"
+			order.ExpiresAt = time.Now().Add(-time.Hour)
+			fixture.payments.orders.orders[order.ID] = order
+		}
+		response = runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", body, current.Customer.SessionID, "recover-after-disable")
+		var view payment.View
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &view) != nil || view.State != state || view.PaymentID != fixture.id || fixture.initiated != 1 || fixture.preflight != 1 {
+			t.Fatal("disabled gate lost existing payment", state, response.Code, response.Body)
+		}
+		response = runtime.checkoutRequest(http.MethodGet, "/kiosk/payment-methods?checkout_id="+order.ID, "", current.Customer.SessionID, "")
+		var available terminalbridge.Availability
+		if response.Code != 200 || json.Unmarshal(response.Body.Bytes(), &available) != nil || available.ActivePayment == nil || available.ActivePayment.PaymentID != fixture.id {
+			t.Fatal("disabled gate lost recovery pointer", response.Code, response.Body)
+		}
+	}
+	terminalHTTPDependencies(t, runtime).TerminalBridge = nil
+	response = runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", body, current.Customer.SessionID, "recover-after-store-missing")
+	if response.Code != 500 {
+		t.Fatal("unavailable store must not claim no operation started", response.Code, response.Body)
+	}
+}
+
+func TestTerminalHTTPDisabledFeatureAuthenticatesBeforeRejectingNewPayment(t *testing.T) {
+	runtime, fixture, current, order := terminalPaymentRuntime(t)
+	terminalHTTPDependencies(t, runtime).TerminalEnabled = false
+	body := `{"checkout_id":"` + order.ID + `"}`
+	response := runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", body, "", "new-payment")
+	if response.Code != 401 {
+		t.Fatal("disabled gate bypassed authentication", response.Code, response.Body)
+	}
+	response = runtime.checkoutRequest(http.MethodPost, "/kiosk/init-terminal-pay", body, current.Customer.SessionID, "new-payment")
+	var failure map[string]any
+	if response.Code != 409 || json.Unmarshal(response.Body.Bytes(), &failure) != nil || fixture.initiated != 0 || fixture.preflight != 0 {
+		t.Fatal("new disabled payment was not safely rejected", response.Code, response.Body)
 	}
 }

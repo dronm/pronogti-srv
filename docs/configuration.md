@@ -31,6 +31,7 @@ HTTP durations use Go duration strings. Session lifetimes below use seconds.
 | `fiscal.worker_enabled` | Run the durable receipt worker; `true`; disabling pauses pending jobs |
 | `fiscal.allow_live` | Permit live receipts only for live profiles and production payments; `false` |
 | `fiscal.poll_interval` | Receipt worker polling interval; `2s`; valid range `1s`..`1m` |
+| `fiscal.correction_time_zone` | Optional IANA zone for interpreting the original KKT transaction date in corrections; defaults to the backend process's local zone |
 | `receipt_email.enabled` | Offer to email a Saby OFD link on issued production receipts; `false` |
 | `receipt_email.saby_devices` | Maps the receipt's frozen driver URL and device ID to its KKT registration number |
 | `session.enabled` | `true`; the customer/kiosk APIs require sessions and startup rejects a disabled configuration |

@@ -72,34 +72,44 @@ func (r *PostgresRepository) LiveShiftProfiles(ctx context.Context) ([]Profile, 
 // ShiftSnapshot freezes the device address and command settings on first use.
 // Replays never resolve a newly assigned kiosk profile or edited connection.
 func (r *PostgresRepository) ShiftSnapshot(ctx context.Context, scope, key string, profile *Profile) (Profile, bool, error) {
+	return fiscalRequestSnapshot(ctx, r, scope, key, profile)
+}
+
+func (r *PostgresRepository) KKTSnapshot(ctx context.Context, scope, key string, request *KKTRequest) (KKTRequest, bool, error) {
+	return fiscalRequestSnapshot(ctx, r, scope, key, request)
+}
+
+// The scope identifies the snapshot type. The unique hash makes concurrent claims
+// return the first committed settings for this operation and idempotency key.
+func fiscalRequestSnapshot[T any](ctx context.Context, r *PostgresRepository, scope, key string, initial *T) (T, bool, error) {
+	var saved T
 	conn, release, err := r.connection(ctx)
 	if err != nil {
-		return Profile{}, false, err
+		return saved, false, err
 	}
 	defer release()
 	digest := sha256.Sum256([]byte(scope + ":" + key))
 	hash := hex.EncodeToString(digest[:])
 	var raw []byte
-	if profile == nil {
+	if initial == nil {
 		err = conn.QueryRow(ctx, `SELECT profile_snapshot FROM public.fiscal_shift_requests WHERE request_hash=$1 AND scope=$2`, hash, scope).Scan(&raw)
 	} else {
-		encoded, marshalErr := json.Marshal(profile)
+		encoded, marshalErr := json.Marshal(initial)
 		if marshalErr != nil {
-			return Profile{}, false, marshalErr
+			return saved, false, marshalErr
 		}
 		err = conn.QueryRow(ctx, `INSERT INTO public.fiscal_shift_requests(request_hash,scope,profile_snapshot)
 			VALUES($1,$2,$3::jsonb) ON CONFLICT(request_hash) DO UPDATE SET request_hash=EXCLUDED.request_hash
 			RETURNING profile_snapshot`, hash, scope, string(encoded)).Scan(&raw)
 	}
 	if errors.Is(err, ds.ErrNoRows) {
-		return Profile{}, false, nil
+		return saved, false, nil
 	}
 	if err != nil {
-		return Profile{}, false, fmt.Errorf("persist fiscal shift request: %w", err)
+		return saved, false, fmt.Errorf("persist fiscal shift request: %w", err)
 	}
-	var saved Profile
 	if err := json.Unmarshal(raw, &saved); err != nil {
-		return Profile{}, false, fmt.Errorf("decode fiscal shift request snapshot: %w", err)
+		return saved, false, fmt.Errorf("decode fiscal shift request snapshot: %w", err)
 	}
 	return saved, true, nil
 }

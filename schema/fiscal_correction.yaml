@@ -1,0 +1,65 @@
+name: FiscalCorrection
+comment: Read-only paired correction history. Handwritten administrator routes own listing, previews, creation and recovery.
+table:
+  schema: public
+  name: fiscal_corrections
+route: /admin/fiscal-corrections
+permissionPrefix: fiscalCorrection
+serviceName: AdminFiscalCorrection
+sessionRequired: true
+crudNotifications: false
+httpRoutes:
+  enabled: false
+keys:
+  - name: id
+    pathName: correction_id
+    type: text
+fields:
+  - name: id
+    type: text
+    primaryKey: true
+  - name: order_id
+    type: text
+  - name: payment_id
+    type: text
+  - name: company_id
+    type: bigint
+  - name: environment
+    type: text
+  - name: operator_id
+    type: bigint
+  - name: source_version
+    type: text
+  - name: reason
+    type: text
+  - name: basis
+    type: text
+  - name: calculation_date
+    type: date
+  - name: prescription_number
+    type: text
+    nullable: true
+  - name: state
+    type: text
+  - name: created_at
+    type: timestamptz
+  - name: updated_at
+    type: timestamptz
+crud:
+  create: false
+  list: true
+  detail: true
+  update: false
+  delete: false
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+applicationRoute:
+  enabled: false
+frontend:
+  scaffold: false
+migration:
+  enabled: false
+test:
+  enabled: false

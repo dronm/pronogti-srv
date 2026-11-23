@@ -59,3 +59,13 @@ func TestShiftOperatorTokenValidation(t *testing.T) {
 		}
 	}
 }
+
+func TestCorrectionTimeZone(t *testing.T) {
+	location, err := (FiscalConfig{CorrectionTimeZone: "Asia/Yekaterinburg"}).CorrectionLocation()
+	if err != nil || location.String() != "Asia/Yekaterinburg" {
+		t.Fatalf("correction location: %v %v", location, err)
+	}
+	if _, err := (FiscalConfig{CorrectionTimeZone: "Not/A_Time_Zone"}).CorrectionLocation(); err == nil {
+		t.Fatal("invalid correction time zone accepted")
+	}
+}

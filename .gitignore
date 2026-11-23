@@ -1,5 +1,6 @@
 *.zip
 .env
 config.json
+prompt
 pronogti
 deploy/deploy.conf

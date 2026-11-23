@@ -1,4 +1,0 @@
-~*
-.env
-/redis/auth.txt
-/pg/auth.txt

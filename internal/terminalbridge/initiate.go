@@ -148,33 +148,8 @@ func (r *Repository) Initiate(ctx context.Context, owner checkout.Owner, orderID
 		if err != nil {
 			return err
 		}
-		if environment == "production" && !r.options.AllowLive {
-			return conflict("terminal_live_disabled", "live terminal payments are disabled")
-		}
-		if environment == "mock" && !r.options.AllowSimulated {
-			return conflict("terminal_simulation_disabled", "simulated terminal payments are disabled")
-		}
-		if lastSeen == nil || time.Since(*lastSeen) > r.options.HeartbeatMaxAge {
-			return conflict("terminal_agent_offline", "terminal agent has no recent authenticated heartbeat")
-		}
-		var status Heartbeat
-		if err := json.Unmarshal(heartbeat, &status); err != nil {
-			return err
-		}
-		reachable := false
-		for _, device := range status.Terminals {
-			if device.TerminalID == terminal.TerminalID {
-				reachable = (device.Connected || device.ConnectorReachable) && device.Capabilities.Sale
-				if environment == "production" && device.Simulated {
-					return conflict("terminal_simulation_forbidden", "production terminal cannot use a simulator")
-				}
-				if environment == "mock" && !device.Simulated {
-					return conflict("terminal_simulation_required", "mock payments require an explicitly simulated terminal")
-				}
-			}
-		}
-		if !reachable {
-			return conflict("terminal_disconnected", "terminal connector is not reachable")
+		if _, code, message := terminalReadiness(r.options, environment, lastSeen, heartbeat, terminal.TerminalID); code != "" {
+			return conflict(code, message)
 		}
 		var active string
 		err = tx.QueryRow(ctx, `SELECT id::text FROM public.terminal_commands WHERE (device_id=$1 OR (company_id=$2 AND physical_id=$3) OR (company_id=$2 AND bank_terminal_id=$4)) AND state IN ('queued','leased','dispatching','waiting','unknown') LIMIT 1`, terminal.ID, owner.CompanyID, terminal.PhysicalID, terminal.BankTerminalID).Scan(&active)

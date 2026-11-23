@@ -17,6 +17,7 @@ import (
 type paymentGetInput struct{ Nonce, ID string }
 
 type TerminalBridgePayments interface {
+	Availability(context.Context, checkout.Owner, string) (terminalbridge.Availability, error)
 	ExistingAttempt(context.Context, checkout.Owner, string, string) (string, error)
 	Initiate(context.Context, checkout.Owner, string, string) (string, error)
 	PaymentDetails(context.Context, string) (terminalbridge.TerminalDetails, error)
@@ -99,6 +100,7 @@ func (s *service) GetPayment(ctx context.Context, input paymentGetInput) (paymen
 			return payment.View{}, err
 		}
 		view.TerminalID, view.CommandID, view.CommandState = details.TerminalID, details.CommandID, details.State
+		view.TerminalResolutionPending = details.ResolutionPending
 	}
 	return view, nil
 }
@@ -109,12 +111,15 @@ func (s *service) InitTerminalPayment(ctx context.Context, input kioskQRRequest)
 	if !s.kioskOnly {
 		return payment.View{}, webapp.Forbidden("terminal payments require a bound kiosk", nil)
 	}
-	if s.checkout == nil || s.checkout.TerminalBridge == nil || !s.checkout.TerminalEnabled {
-		return payment.View{}, webapp.Conflict("terminal payments are disabled", map[string]any{"code": "terminal_payments_disabled"})
-	}
 	actor, err := s.checkoutActor(ctx, input.Nonce)
 	if err != nil {
 		return payment.View{}, err
+	}
+	if s.checkout == nil || s.checkout.TerminalBridge == nil {
+		// An unavailable store cannot prove that an earlier request did not
+		// reserve a payment. Keep this ambiguous rather than returning the
+		// definite disabled/new-operation response used below.
+		return payment.View{}, webapp.Internal("terminal payment recovery is unavailable", nil)
 	}
 	owner := terminalOwner(actor)
 	id, err := s.checkout.TerminalBridge.ExistingAttempt(ctx, owner, input.CheckoutID, input.IdempotencyKey)
@@ -122,6 +127,9 @@ func (s *service) InitTerminalPayment(ctx context.Context, input kioskQRRequest)
 		return payment.View{}, err
 	}
 	if id == "" {
+		if !s.checkout.TerminalEnabled {
+			return payment.View{}, webapp.Conflict("terminal payments are disabled", map[string]any{"code": "terminal_payments_disabled"})
+		}
 		preparer, err := s.checkoutService()
 		if err != nil {
 			return payment.View{}, err

@@ -10,6 +10,7 @@ import (
 	"github.com/dronm/pronogti/internal/adminauth"
 	"github.com/dronm/pronogti/internal/adminnav"
 	"github.com/dronm/pronogti/internal/config"
+	"github.com/dronm/pronogti/internal/correction"
 	"github.com/dronm/pronogti/internal/fiscal"
 	"github.com/dronm/pronogti/internal/httpapi"
 	"github.com/dronm/pronogti/internal/payment"
@@ -45,13 +46,25 @@ func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgr
 		cleanup()
 		return nil, nil, err
 	}
+	fiscalProfiles := fiscal.NewPostgresRepository(db)
 	options := httpapi.AdminHTTPOptions{
 		TerminalBridge: terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)),
 		AllowedOrigins: cfg.Admin.AllowedOrigins, RequestTimeout: requestTimeout,
-		Shifts:  fiscal.NewShiftService(fiscal.NewPostgresRepository(db), fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive),
+		KKT:     fiscal.NewKKTService(fiscalProfiles, cfg.Fiscal.AllowLive),
+		Shifts:  fiscal.NewShiftService(fiscalProfiles, fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive),
 		Version: Version, Commit: Commit, BuildDate: BuildDate,
 		Navigation: adminnav.NewService(db), GeneratedRoutes: generated, GeneratedPermissions: permissions,
 	}
+	correctionLocation, err := cfg.Fiscal.CorrectionLocation()
+	if err != nil {
+		cleanup()
+		return nil, nil, err
+	}
+	corrections := correction.NewService(correction.NewPostgresRepository(db), fiscal.HTTPDriver{}, correction.Options{
+		AllowLive: cfg.Fiscal.AllowLive, Location: correctionLocation,
+	})
+	options.Corrections = corrections
+	workers.Start("fiscal corrections", corrections.Run)
 	if cfg.Refunds.Enabled {
 		refunds := refund.NewService(refund.NewPostgresRepository(db),
 			refund.SDKBank{Tokens: paymentTokens},

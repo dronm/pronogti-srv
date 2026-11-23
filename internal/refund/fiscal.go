@@ -110,6 +110,23 @@ func buildReturnReceipt(salePayload json.RawMessage, lines []Line, amountKopecks
 	if receipt["payment"], err = json.Marshal(payment); err != nil {
 		return nil, err
 	}
+	// The effective sale can be a correction receipt. The customer's actual
+	// refund uses a normal return receipt, so correction-only basis fields and
+	// the correction's reference to its predecessor must not be copied to it.
+	if raw := receipt["additionalData"]; len(raw) > 0 {
+		var additional map[string]json.RawMessage
+		if err := json.Unmarshal(raw, &additional); err != nil {
+			return nil, errors.New("invalid original fiscal additional data")
+		}
+		if _, corrected := additional["correctedCalculationDate"]; corrected {
+			delete(additional, "correctedCalculationDate")
+			delete(additional, "prescriptionNumber")
+			delete(additional, "additionalReceiptProperty")
+			if receipt["additionalData"], err = json.Marshal(additional); err != nil {
+				return nil, err
+			}
+		}
+	}
 	payload, err := json.Marshal(receipt)
 	if err != nil {
 		return nil, err

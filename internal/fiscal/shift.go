@@ -69,7 +69,7 @@ func (s *ShiftService) resolveClose(ctx context.Context, scope, key string, load
 		if err != nil {
 			return ShiftResult{}, err
 		}
-		if _, err = s.prepareShiftProfile(profile, "shift-preflight"); err != nil {
+		if _, err = prepareKKTProfile(profile, "shift-preflight", s.allowLive); err != nil {
 			return ShiftResult{}, err
 		}
 		profile, _, err = s.profiles.ShiftSnapshot(ctx, scope, key, &profile)
@@ -93,7 +93,7 @@ func (s *ShiftService) closeSnapshot(ctx context.Context, profile Profile, scope
 	}
 	digest := sha256.Sum256([]byte(scope + ":" + key))
 	requestID := "pronogti-close-" + hex.EncodeToString(digest[:])
-	cfg, err := s.prepareShiftProfile(profile, requestID)
+	cfg, err := prepareKKTProfile(profile, requestID, s.allowLive)
 	if err != nil {
 		return ShiftResult{}, err
 	}
@@ -114,7 +114,7 @@ func (s *ShiftService) closeSnapshot(ctx context.Context, profile Profile, scope
 	return s.driver.CloseShift(ctx, cfg, requestID, payload)
 }
 
-func (s *ShiftService) prepareShiftProfile(profile Profile, requestID string) (DriverConfig, error) {
+func prepareKKTProfile(profile Profile, requestID string, allowLive bool) (DriverConfig, error) {
 	if !profile.Enabled {
 		return DriverConfig{}, webapp.Conflict("Фискальный профиль отключён.", nil)
 	}
@@ -124,8 +124,8 @@ func (s *ShiftService) prepareShiftProfile(profile Profile, requestID string) (D
 	if profile.Mode == "demo" {
 		return DriverConfig{}, nil
 	}
-	if !s.allowLive {
-		return DriverConfig{}, webapp.Conflict("Закрытие смены запрещено: включите fiscal.allow_live в конфигурации сервера.", nil)
+	if !allowLive {
+		return DriverConfig{}, webapp.Conflict("Операции с ККТ запрещены. Включите fiscal.allow_live в конфигурации сервера.", nil)
 	}
 	if err := profile.Validate(); err != nil {
 		return DriverConfig{}, webapp.Conflict("Некорректный фискальный профиль: "+err.Error(), nil)

@@ -42,6 +42,16 @@ const maxDriverResponseBytes = 1024 * 1024
 var errDriverUncertain = errors.New("receipt driver did not confirm an outcome; look up the original request ID")
 
 func (HTTPDriver) Create(ctx context.Context, cfg DriverConfig, requestID string, params json.RawMessage) (DriverResult, error) {
+	return submitDriverCommand(ctx, cfg, requestID, params, "createReceipt", validFiscalResult)
+}
+
+// CreateCorrection uses the driver's complete correction workflow, including
+// conditional shift opening and cleanup. Each fiscal document owns a request ID.
+func (HTTPDriver) CreateCorrection(ctx context.Context, cfg DriverConfig, requestID string, params json.RawMessage) (DriverResult, error) {
+	return submitDriverCommand(ctx, cfg, requestID, params, "createCorrectionReceipt", validFiscalResult)
+}
+
+func submitDriverCommand(ctx context.Context, cfg DriverConfig, requestID string, params json.RawMessage, command string, validData func(json.RawMessage) bool) (DriverResult, error) {
 	if ctx == nil {
 		return DriverResult{State: "failed", ErrorCode: "invalid_context"}, errors.New("receipt context is required")
 	}
@@ -61,15 +71,24 @@ func (HTTPDriver) Create(ctx context.Context, cfg DriverConfig, requestID string
 		Command   string          `json:"cmd"`
 		RequestID string          `json:"requestId"`
 		Params    json.RawMessage `json:"params"`
-	}{cfg.DeviceID, "createReceipt", requestID, params})
+	}{cfg.DeviceID, command, requestID, params})
 	if err != nil {
 		return DriverResult{State: "failed", ErrorCode: "invalid_request"}, errors.New("cannot encode receipt request")
 	}
 	base.Path = strings.TrimRight(base.Path, "/") + "/api/v1/commands"
-	return exchangeDriver(ctx, cfg, requestID, base, body, false)
+	return exchangeDriver(ctx, cfg, requestID, base, body, false, command, validData)
 }
 
 func (HTTPDriver) Lookup(ctx context.Context, cfg DriverConfig, requestID string) (DriverResult, error) {
+	return lookupDriverReceipt(ctx, cfg, requestID, "createReceipt")
+}
+
+// LookupCorrection retrieves the original correction request without resending it.
+func (HTTPDriver) LookupCorrection(ctx context.Context, cfg DriverConfig, requestID string) (DriverResult, error) {
+	return lookupDriverReceipt(ctx, cfg, requestID, "createCorrectionReceipt")
+}
+
+func lookupDriverReceipt(ctx context.Context, cfg DriverConfig, requestID, command string) (DriverResult, error) {
 	base, err := validateDriverConfig(cfg, requestID)
 	if err != nil {
 		return DriverResult{State: "unknown", ErrorCode: "invalid_configuration"}, err
@@ -77,7 +96,7 @@ func (HTTPDriver) Lookup(ctx context.Context, cfg DriverConfig, requestID string
 	base.Path = strings.TrimRight(base.Path, "/") + "/api/v1/requests"
 	query := url.Values{"deviceId": {cfg.DeviceID}, "requestId": {requestID}}
 	base.RawQuery = query.Encode()
-	return exchangeDriver(ctx, cfg, requestID, base, nil, true)
+	return exchangeDriver(ctx, cfg, requestID, base, nil, true, command, validFiscalResult)
 }
 
 func validateDriverConfig(cfg DriverConfig, requestID string) (*url.URL, error) {
@@ -100,7 +119,7 @@ func validDriverToken(token string) bool {
 	return true
 }
 
-func exchangeDriver(ctx context.Context, cfg DriverConfig, requestID string, endpoint *url.URL, body []byte, lookup bool) (DriverResult, error) {
+func exchangeDriver(ctx context.Context, cfg DriverConfig, requestID string, endpoint *url.URL, body []byte, lookup bool, command string, validData func(json.RawMessage) bool) (DriverResult, error) {
 	method := http.MethodPost
 	if lookup {
 		method = http.MethodGet
@@ -159,13 +178,13 @@ func exchangeDriver(ctx context.Context, cfg DriverConfig, requestID string, end
 		return result, errDriverUncertain
 	}
 	// Lookup's live journal states omit cmd. Saved execution responses contain it.
-	if envelope.Command != "createReceipt" && !(lookup && envelope.Command == "" &&
+	if envelope.Command != command && !(lookup && envelope.Command == "" &&
 		(envelope.Status == "unknown" || envelope.Status == "in_progress" || result.ErrorCode == "not_found")) {
 		return result, errDriverUncertain
 	}
 	switch envelope.Status {
 	case "completed":
-		if response.StatusCode != http.StatusOK || envelope.Error != nil || !validFiscalResult(envelope.Data) {
+		if response.StatusCode != http.StatusOK || envelope.Error != nil || !validData(envelope.Data) {
 			return result, errDriverUncertain
 		}
 		result.State = "completed"

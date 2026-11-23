@@ -73,13 +73,24 @@ const refundSaleSQL = `SELECT p.id::text,p.order_id::text,p.company_id,p.payment
 	p.amount_kopecks,COALESCE(p.acquiring_operation_id,''),COALESCE(p.qrc_id,''),
 	COALESCE(p.transaction_id,''),COALESCE(p.ref_transaction_id,''),p.profile_snapshot,
 	COALESCE(profile.jwt_env,''),profile.jwt_ciphertext,o.state,o.items_snapshot,
-	COALESCE(fr.state,''),COALESCE(fr.fiscal_snapshot,o.fiscal_snapshot),fr.request_payload
+	COALESCE(fr.state,''),COALESCE(corrected.fiscal_snapshot,fr.fiscal_snapshot,o.fiscal_snapshot),
+	COALESCE(corrected.replacement_payload,fr.request_payload),
+	EXISTS (SELECT 1 FROM public.fiscal_corrections active
+		WHERE active.order_id=o.id AND active.payment_id=p.id AND active.company_id=p.company_id
+			AND active.environment=p.environment AND active.state<>'completed'),
+	corrected.id IS NOT NULL
 	FROM public.payments p
 	JOIN public.payment_orders o ON o.id=p.order_id AND o.company_id=p.company_id
 	JOIN public.payment_profiles profile ON profile.id=p.payment_profile_id
 		AND profile.company_id=p.company_id AND profile.environment=p.environment
 	LEFT JOIN public.fiscal_receipts fr ON fr.order_id=o.id AND fr.payment_id=p.id
 		AND fr.company_id=p.company_id AND fr.environment=p.environment
+	LEFT JOIN LATERAL (
+		SELECT c.id,c.fiscal_snapshot,c.replacement_payload FROM public.fiscal_corrections c
+		WHERE c.order_id=o.id AND c.payment_id=p.id AND c.company_id=p.company_id
+			AND c.environment=p.environment AND c.state='completed'
+		ORDER BY c.created_at DESC,c.id DESC LIMIT 1
+	) corrected ON true
 	WHERE p.id=$1`
 
 func loadSale(ctx context.Context, query ds.Querier, paymentID string, lockPayment bool) (Sale, error) {
@@ -91,12 +102,14 @@ func loadSale(ctx context.Context, query ds.Querier, paymentID string, lockPayme
 	var profileID int64
 	var environment string
 	var profile, fiscalProfile, items []byte
+	var correctionActive, corrected bool
 	bank := &sale.Bank
 	err := query.QueryRow(ctx, sql, paymentID).Scan(
 		&bank.PaymentID, &sale.OrderID, &sale.CompanyID, &profileID, &bank.Method, &environment,
 		&sale.PaymentState, &bank.AmountKopecks, &bank.OperationID, &bank.QRCID,
 		&bank.TransactionID, &bank.RefTransactionID, &profile, &bank.Profile.JWTEnv,
 		&bank.Profile.JWTCiphertext, &sale.OrderState, &items, &sale.FiscalState, &fiscalProfile, &sale.SaleReceipt,
+		&correctionActive, &corrected,
 	)
 	if errors.Is(err, ds.ErrNoRows) {
 		return Sale{}, webapp.NotFound("payment not found", nil)
@@ -113,6 +126,11 @@ func loadSale(ctx context.Context, query ds.Querier, paymentID string, lockPayme
 	}
 	if err := json.Unmarshal(items, &sale.Items); err != nil {
 		return Sale{}, errors.New("invalid original sale item snapshot")
+	}
+	if correctionActive {
+		sale.CorrectionBlockReason = "receipt_correction_incomplete"
+	} else if corrected {
+		sale.Items, sale.CorrectionBlockReason = correctedRefundItems(sale.SaleReceipt, sale.Items, bank.AmountKopecks)
 	}
 	return sale, nil
 }

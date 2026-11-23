@@ -44,17 +44,14 @@ require (
 	modernc.org/sqlite v1.34.5 // indirect
 )
 
-// The uploaded receipt driver is kept as a source dependency. Its high-level
-// workflow is exposed by HTTP; run it separately with go tool goterminalfa.
-replace github.com/dronm/goterminalfa => ./third_party/goterminalfa
+replace github.com/dronm/goterminalfa => /home/andrey/go/goterminalfa
 
 tool github.com/dronm/goterminalfa/cmd/goterminalfa
 
-// The customized YClients source is bundled for reproducible deployment.
-replace github.com/dronm/goyclients => ./third_party/goyclients
+replace github.com/dronm/goyclients => /home/andrey/go/goyclients
 
-replace github.com/dronm/paytochkabank => ./third_party/paytochkabank
+replace github.com/dronm/paytochkabank => /home/andrey/go/payTochkaBank
 
-replace github.com/dronm/session => ./third_party/session
+replace github.com/dronm/session => /home/andrey/go/session
 
 tool github.com/dronm/codegen/cmd/codegen

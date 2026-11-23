@@ -29,6 +29,9 @@ type Sale struct {
 	Items         []checkout.Item
 	FiscalProfile fiscal.Profile
 	SaleReceipt   json.RawMessage
+	// CorrectionBlockReason prevents a bank refund while fiscal correction is
+	// unfinished or cannot be represented by the existing cashless refund flow.
+	CorrectionBlockReason string
 }
 
 type CreateRequest struct {
@@ -137,6 +140,10 @@ func (s *Service) Quote(ctx context.Context, paymentID string) (Quote, error) {
 		result.Reason = "terminal_refunds_unsupported"
 		return result, nil
 	}
+	if sale.CorrectionBlockReason != "" {
+		result.Reason = sale.CorrectionBlockReason
+		return result, nil
+	}
 	for index, item := range sale.Items {
 		_, quantity, err := checkout.ParseQuantity(item.Quantity)
 		if err != nil {
@@ -174,7 +181,7 @@ func (s *Service) Create(ctx context.Context, paymentID string, operatorID int64
 	digest := sha256.Sum256(encoded)
 	return s.repo.Reserve(ctx, paymentID, operatorID, key, hex.EncodeToString(digest[:]), func(sale Sale, previous []Refund) (Refund, error) {
 		if reason := s.ineligible(sale, previous); reason != "" {
-			return Refund{}, webapp.Conflict("payment is unavailable for refund", map[string]any{"code": reason})
+			return Refund{}, webapp.Conflict(refundUnavailableMessage(reason), map[string]any{"code": reason})
 		}
 		lines, total, err := buildLines(sale.Items, sale.Bank.AmountKopecks, items, consumed(previous))
 		if err != nil {
@@ -200,6 +207,9 @@ func (s *Service) Get(ctx context.Context, paymentID, refundID string) (Refund, 
 func (s *Service) ineligible(sale Sale, previous []Refund) string {
 	if sale.Bank.Method == payment.MethodTerminalCard {
 		return "terminal_refunds_unsupported"
+	}
+	if sale.CorrectionBlockReason != "" {
+		return sale.CorrectionBlockReason
 	}
 	if sale.PaymentState != "paid" || sale.OrderState != "paid" {
 		return "payment_not_paid"
@@ -230,6 +240,19 @@ func (s *Service) ineligible(sale Sale, previous []Refund) string {
 		return "refund_bank_identity_unavailable"
 	}
 	return ""
+}
+
+func refundUnavailableMessage(reason string) string {
+	switch reason {
+	case "receipt_correction_incomplete":
+		return "Сначала завершите коррекцию чека или проверьте её результат."
+	case "corrected_receipt_refund_unsupported":
+		return "Исправленный чек содержит сумму, способ оплаты или позиции, которые не поддерживаются автоматическим возвратом."
+	case "corrected_receipt_invalid":
+		return "Не удалось подготовить возврат по исправленному чеку. Проверьте данные коррекции."
+	default:
+		return "payment is unavailable for refund"
+	}
 }
 
 func consumed(previous []Refund) map[int]ConsumedLine {
