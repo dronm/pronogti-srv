@@ -215,6 +215,12 @@ func validateFiscalProfileCodes(input modelbind.ModelInput[*models.FiscalProfile
 	if input.IsPresent("payment_method") && !fiscal.ValidPaymentMethod(p.PaymentMethod) {
 		fields["payment_method"] = "Выберите допустимый признак способа расчёта."
 	}
+	if input.IsPresent("time_zone") && p.TimeZone != nil && !fiscal.ValidReceiptTimeZone(*p.TimeZone) {
+		fields["time_zone"] = "Выберите часовую зону от 1 до 11."
+	}
+	if input.IsPresent("automatic_device_number") && p.AutomaticDeviceNumber != nil && !fiscal.ValidAutomaticDeviceNumber(*p.AutomaticDeviceNumber) {
+		fields["automatic_device_number"] = "Укажите номер автомата длиной до 20 символов в кодировке ККТ или оставьте поле пустым."
+	}
 	if len(fields) > 0 {
 		return webapp.BadRequest("Некорректные параметры фискального профиля.", map[string]any{
 			"field_errors": fields,

@@ -36,6 +36,11 @@ func returnReceiptFixture(t *testing.T, profile fiscal.Profile) (json.RawMessage
 func TestPrepareReturnReceiptPreservesOriginalFiscalFields(t *testing.T) {
 	profile := fiscal.DefaultProfile(1)
 	profile.ServiceVATRate, profile.GoodVATRate, profile.TaxSystem = 5, 6, 4
+	enabled, zone := true, 4
+	profile.SendSettlementDetails = &enabled
+	profile.TimeZone = &zone
+	profile.AutomaticDeviceNumber = "0007"
+	profile.SettlementAddress, profile.SettlementPlace = "Тюмень", "Салон"
 	salePayload, lines := returnReceiptFixture(t, profile)
 	returned, err := PrepareReturnReceipt(profile, "mock", "demo", salePayload, lines, 150, 350, false)
 	if err != nil {

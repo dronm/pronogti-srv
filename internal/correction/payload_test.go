@@ -36,9 +36,19 @@ var payloadNow = time.Date(2026, 11, 17, 12, 0, 0, 0, time.UTC)
 
 func TestPayloadBuildPreservesOriginalFiscalDataAndDoesNotMutateInputs(t *testing.T) {
 	source := payloadSource()
+	zone := 4
+	source.Payload.AdditionalData.TimeZone = &zone
+	source.Payload.AdditionalData.AutomaticDeviceNumber = "0007"
+	originalJSON, _ := json.Marshal(source.Payload)
+	var err error
+	source.Payload, err = DecodeReceipt(originalJSON)
+	if err != nil {
+		t.Fatal(err)
+	}
 	request := payloadRequest(source)
 	request.Receipt.Payment.TaxSystem = 2
-	originalJSON, _ := json.Marshal(source.Payload)
+	request.Receipt.AdditionalData.TimeZone = nil
+	request.Receipt.AdditionalData.AutomaticDeviceNumber = ""
 	requestJSON, _ := json.Marshal(request)
 	preview, err := Build(source, request, payloadNow, time.UTC)
 	if err != nil {
@@ -50,6 +60,9 @@ func TestPayloadBuildPreservesOriginalFiscalDataAndDoesNotMutateInputs(t *testin
 	for _, receipt := range []Receipt{preview.Reversal, preview.Replacement} {
 		if receipt.AdditionalData.AdditionalReceiptProperty != "123456789" || receipt.AdditionalData.CorrectedCalculationDate != time.Date(2026, 11, 16, 0, 0, 0, 0, time.UTC).Unix() || receipt.Payment.CashlessKopecks != 10000 {
 			t.Fatalf("missing source link, date or explicit payment: %+v", receipt)
+		}
+		if receipt.AdditionalData.AutomaticDeviceNumber != "0007" || receipt.AdditionalData.TimeZone == nil || *receipt.AdditionalData.TimeZone != zone {
+			t.Fatalf("missing original settlement details: %+v", receipt.AdditionalData)
 		}
 	}
 	gotSourceJSON, _ := json.Marshal(source.Payload)

@@ -94,6 +94,44 @@ func generatedIntegrationSalon(t *testing.T, fixture generatedAdministratorInteg
 	return salon
 }
 
+func TestGeneratedAdministratorFiscalReceiptDetails(t *testing.T) {
+	fixture := newGeneratedAdministratorIntegration(t)
+	const create = `{"company_id":781898,"name":"Receipt details","enabled":true,"mode":"demo",
+		"timeout_seconds":100,"cashier_name":"Cashier","tax_system":1,"service_vat_rate":6,
+		"good_vat_rate":6,"payment_method":4,"internet_payment":false,"suppress_print":false,
+		"settlement_address":"Тюмень","settlement_place":"Салон","automatic_device_number":"0007",
+		"time_zone":4,"send_settlement_details":true}`
+	response := adminRequest(fixture.handler, http.MethodPost, "/admin/fiscal-profiles", create, fixture.cookie, fixture.nonce)
+	var created models.FiscalProfile
+	if response.Code != http.StatusCreated || json.Unmarshal(response.Body.Bytes(), &created) != nil || created.ID <= 0 {
+		t.Fatalf("create fiscal profile: %d %s", response.Code, response.Body)
+	}
+	path := "/admin/fiscal-profiles/" + strconv.FormatInt(created.ID, 10)
+	get := func() models.FiscalProfile {
+		t.Helper()
+		response := adminRequest(fixture.handler, http.MethodGet, path, "", fixture.cookie, "")
+		var profile models.FiscalProfile
+		if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &profile) != nil {
+			t.Fatalf("read fiscal profile: %d %s", response.Code, response.Body)
+		}
+		return profile
+	}
+	profile := get()
+	if !profile.SendSettlementDetails || profile.TimeZone == nil || *profile.TimeZone != 4 ||
+		profile.AutomaticDeviceNumber == nil || *profile.AutomaticDeviceNumber != "0007" {
+		t.Fatalf("receipt details did not round-trip: %+v", profile)
+	}
+	const clear = `{"automatic_device_number":null,"time_zone":null,"send_settlement_details":false}`
+	response = adminRequest(fixture.handler, http.MethodPatch, path, clear, fixture.cookie, fixture.nonce)
+	if response.Code != http.StatusOK {
+		t.Fatalf("clear fiscal receipt details: %d %s", response.Code, response.Body)
+	}
+	profile = get()
+	if profile.SendSettlementDetails || profile.TimeZone != nil || profile.AutomaticDeviceNumber != nil {
+		t.Fatalf("receipt details not cleared: %+v", profile)
+	}
+}
+
 func TestGeneratedAdministratorIntegrationSalonCRUD(t *testing.T) {
 	fixture := newGeneratedAdministratorIntegration(t)
 	const companyID int64 = 880010

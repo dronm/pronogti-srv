@@ -44,6 +44,46 @@ func TestBuildPayloadCashlessReceipt(t *testing.T) {
 	}
 }
 
+func TestBuildPayloadSettlementDetails(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		snapshot  string
+		wantExtra string
+	}{
+		{"enabled", `{"send_settlement_details":true,"automatic_device_number":"0007","time_zone":4}`,
+			`{"automaticDeviceNumber":"0007","cashierName":"Cashier","internetPayment":0,"settlementAddress":"Тюмень","settlementPlace":"https://salon.example","timeZone":4}`},
+		{"disabled", `{"send_settlement_details":false,"automatic_device_number":"0007","time_zone":4}`,
+			`{"cashierName":"Cashier","internetPayment":0}`},
+		{"internet payment", `{"send_settlement_details":false,"internet_payment":true}`,
+			`{"cashierName":"Cashier","internetPayment":1,"settlementPlace":"https://salon.example"}`},
+		{"legacy snapshot", `{}`,
+			`{"cashierName":"Cashier","internetPayment":0,"settlementAddress":"Тюмень","settlementPlace":"https://salon.example"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			profile := DefaultProfile(781898)
+			profile.SettlementAddress = "Тюмень"
+			profile.SettlementPlace = "https://salon.example"
+			if err := json.Unmarshal([]byte(tc.snapshot), &profile); err != nil {
+				t.Fatal(err)
+			}
+			payload, err := BuildPayload(receiptOrder(), profile)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var receipt struct {
+				AdditionalData map[string]json.RawMessage `json:"additionalData"`
+			}
+			if err := json.Unmarshal(payload, &receipt); err != nil {
+				t.Fatal(err)
+			}
+			got, err := json.Marshal(receipt.AdditionalData)
+			if err != nil || string(got) != tc.wantExtra {
+				t.Fatalf("additionalData = %s, want %s: %v", got, tc.wantExtra, err)
+			}
+		})
+	}
+}
+
 func TestBuildPayloadRoundedGoodsAmount(t *testing.T) {
 	order := receiptOrder()
 	order.Items[0].Kind = checkout.KindGood
@@ -148,6 +188,9 @@ func TestProfileValidation(t *testing.T) {
 		{"nonnumeric INN", func(p *Profile) { p.CashierINN = "12345678901A" }},
 		{"website required", func(p *Profile) { p.InternetPayment = true }},
 		{"address too long", func(p *Profile) { p.SettlementAddress = strings.Repeat("Я", 257) }},
+		{"invalid time zone", func(p *Profile) { zone := 12; p.TimeZone = &zone }},
+		{"automatic device number too long", func(p *Profile) { p.AutomaticDeviceNumber = strings.Repeat("Я", 21) }},
+		{"unsupported automatic device number", func(p *Profile) { p.AutomaticDeviceNumber = "KKT\x00-1" }},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

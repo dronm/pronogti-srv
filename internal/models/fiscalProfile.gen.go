@@ -34,13 +34,19 @@ type FiscalProfile struct {
 	// TerminalFA numeric VAT code for goods.
 	GoodVatRate int `json:"good_vat_rate" required:"true"`
 	// TerminalFA numeric settlement method code (FFD tag 1214).
-	PaymentMethod     int       `json:"payment_method" required:"true"`
-	SettlementAddress *string   `json:"settlement_address"`
-	SettlementPlace   *string   `json:"settlement_place"`
-	InternetPayment   bool      `json:"internet_payment" required:"true"`
-	SuppressPrint     bool      `json:"suppress_print" required:"true"`
-	CreatedAt         time.Time `json:"created_at" srvCalc:"true"`
-	UpdatedAt         time.Time `json:"updated_at" srvCalc:"true"`
+	PaymentMethod     int     `json:"payment_method" required:"true"`
+	SettlementAddress *string `json:"settlement_address"`
+	SettlementPlace   *string `json:"settlement_place"`
+	// Automatic settlement device number (FFD tag 1036).
+	AutomaticDeviceNumber *string `json:"automatic_device_number" maxLen:"20"`
+	// Russian settlement time-zone code (FFD tag 1011).
+	TimeZone *int `json:"time_zone"`
+	// Send configured settlement details with each receipt.
+	SendSettlementDetails bool      `json:"send_settlement_details"`
+	InternetPayment       bool      `json:"internet_payment" required:"true"`
+	SuppressPrint         bool      `json:"suppress_print" required:"true"`
+	CreatedAt             time.Time `json:"created_at" srvCalc:"true"`
+	UpdatedAt             time.Time `json:"updated_at" srvCalc:"true"`
 }
 
 func (m FiscalProfile) Relation() string {

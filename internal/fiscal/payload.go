@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/dronm/pronogti/internal/checkout"
 	"golang.org/x/text/encoding/charmap"
@@ -42,6 +43,11 @@ type Profile struct {
 	SettlementPlace   string `json:"settlement_place"`
 	InternetPayment   bool   `json:"internet_payment"`
 	SuppressPrint     bool   `json:"suppress_print"`
+
+	AutomaticDeviceNumber string `json:"automatic_device_number"`
+	TimeZone              *int   `json:"time_zone"`
+	// Nil identifies snapshots captured before the switch was added.
+	SendSettlementDetails *bool `json:"send_settlement_details,omitempty"`
 }
 
 func DefaultProfile(companyID int64) Profile {
@@ -78,6 +84,16 @@ func ValidPaymentMethod(code int) bool {
 // ValidTimeoutSeconds reports whether the driver HTTP timeout is supported.
 func ValidTimeoutSeconds(seconds int) bool {
 	return seconds >= 1 && seconds <= 300
+}
+
+// ValidReceiptTimeZone checks the zone numbers in Article 5 of Federal Law No. 107-FZ.
+func ValidReceiptTimeZone(code int) bool {
+	return code >= 1 && code <= 11
+}
+
+// ValidAutomaticDeviceNumber checks a supplied FFD tag 1036 value.
+func ValidAutomaticDeviceNumber(value string) bool {
+	return strings.IndexFunc(value, unicode.IsControl) < 0 && receiptText("automatic device number", value, 20, true) == nil
 }
 
 // Validate checks the supported unmarked-receipt configuration. Tax codes are
@@ -127,6 +143,12 @@ func (p Profile) Validate() error {
 	if err := receiptText("settlement place", p.SettlementPlace, 256, p.InternetPayment); err != nil {
 		return err
 	}
+	if p.AutomaticDeviceNumber != "" && !ValidAutomaticDeviceNumber(p.AutomaticDeviceNumber) {
+		return errors.New("fiscal automatic device number must contain 1 to 20 CP866 characters")
+	}
+	if p.TimeZone != nil && !ValidReceiptTimeZone(*p.TimeZone) {
+		return errors.New("fiscal time zone must be between 1 and 11")
+	}
 	return nil
 }
 
@@ -146,6 +168,9 @@ type receiptAdditional struct {
 	SettlementAddress string `json:"settlementAddress,omitempty"`
 	SettlementPlace   string `json:"settlementPlace,omitempty"`
 	InternetPayment   int    `json:"internetPayment"`
+
+	AutomaticDeviceNumber string `json:"automaticDeviceNumber,omitempty"`
+	TimeZone              *int   `json:"timeZone,omitempty"`
 }
 
 type receiptPayment struct {
@@ -200,13 +225,20 @@ func BuildPayloadWithContact(order checkout.Order, profile Profile, customerCont
 	}
 	p := receiptPayload{
 		CashierName: profile.CashierName, CashierINN: profile.CashierINN,
-		AdditionalData:  receiptAdditional{CashierName: profile.CashierName, CashierINN: profile.CashierINN, CustomerContact: customerContact, SettlementAddress: profile.SettlementAddress, SettlementPlace: profile.SettlementPlace},
+		AdditionalData:  receiptAdditional{CashierName: profile.CashierName, CashierINN: profile.CashierINN, CustomerContact: customerContact},
 		Payment:         receiptPayment{TaxSystem: profile.TaxSystem, CashlessKopecks: order.PayableKopecks},
 		CalculationSign: 1, TotalKopecks: order.PayableKopecks,
 		Items: make([]receiptItem, 0, len(order.Items)),
 	}
+	if profile.SendSettlementDetails == nil || *profile.SendSettlementDetails {
+		p.AdditionalData.SettlementAddress = profile.SettlementAddress
+		p.AdditionalData.SettlementPlace = profile.SettlementPlace
+		p.AdditionalData.AutomaticDeviceNumber = profile.AutomaticDeviceNumber
+		p.AdditionalData.TimeZone = profile.TimeZone
+	}
 	if profile.InternetPayment {
 		p.AdditionalData.InternetPayment = 1
+		p.AdditionalData.SettlementPlace = profile.SettlementPlace
 	}
 	if profile.SuppressPrint {
 		one, suppress := 1, 41029

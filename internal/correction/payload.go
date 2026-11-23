@@ -76,6 +76,10 @@ func Build(source Source, request CreateRequest, now time.Time, location *time.L
 		return Preview{}, errors.New("У исходного чека отсутствуют подтверждённые фискальные реквизиты.")
 	}
 
+	// These profile attributes are frozen with the original receipt and are
+	// absent from the editable correction form.
+	request.Receipt.AdditionalData.AutomaticDeviceNumber = source.Payload.AdditionalData.AutomaticDeviceNumber
+	request.Receipt.AdditionalData.TimeZone = source.Payload.AdditionalData.TimeZone
 	reversal, replacement := cloneReceipt(source.Payload), cloneReceipt(request.Receipt)
 	if err := validateReceipt(&reversal, false); err != nil {
 		return Preview{}, fmt.Errorf("Невозможно воспроизвести исходный чек: %w", err)
@@ -151,6 +155,12 @@ func validateReceipt(receipt *Receipt, replacement bool) error {
 	}
 	if err := validateINN(additional.CashierINN); err != nil {
 		return err
+	}
+	if additional.AutomaticDeviceNumber != "" && !fiscal.ValidAutomaticDeviceNumber(additional.AutomaticDeviceNumber) {
+		return errors.New("Укажите корректный номер автомата длиной до 20 символов в кодировке ККТ.")
+	}
+	if additional.TimeZone != nil && !fiscal.ValidReceiptTimeZone(*additional.TimeZone) {
+		return errors.New("Часовая зона должна быть от 1 до 11.")
 	}
 	if additional.InternetPayment != 0 && additional.InternetPayment != 1 {
 		return errors.New("Признак расчёта в интернете должен быть 0 или 1.")
@@ -288,6 +298,7 @@ func cloneReceipt(value Receipt) Receipt {
 	}
 	value.SuppressShiftPrint = copyInt(value.SuppressShiftPrint)
 	value.PrintSuppressionCode = copyInt(value.PrintSuppressionCode)
+	value.AdditionalData.TimeZone = copyInt(value.AdditionalData.TimeZone)
 	value.Items = append([]Item(nil), value.Items...)
 	for index := range value.Items {
 		value.Items[index].Measure = copyInt(value.Items[index].Measure)

@@ -30,6 +30,8 @@ type AdditionalData struct {
 	CustomerContact           string `json:"customerContact,omitempty"`
 	SettlementAddress         string `json:"settlementAddress,omitempty"`
 	SettlementPlace           string `json:"settlementPlace,omitempty"`
+	AutomaticDeviceNumber     string `json:"automaticDeviceNumber,omitempty"`
+	TimeZone                  *int   `json:"timeZone,omitempty"`
 	InternetPayment           int    `json:"internetPayment"`
 	CorrectedCalculationDate  int64  `json:"correctedCalculationDate,omitempty"`
 	PrescriptionNumber        string `json:"prescriptionNumber,omitempty"`

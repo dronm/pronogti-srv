@@ -146,6 +146,27 @@ fields:
     type: text
     nullable: true
 
+  - name: automatic_device_number
+    type: text
+    nullable: true
+    maxLen: 20
+    check: char_length(btrim(automatic_device_number)) BETWEEN 1 AND 20
+    comment: Automatic settlement device number (FFD tag 1036).
+    valibot: 'v.nullable(v.pipe(TextSchema, v.maxLength(20, "Номер автомата должен содержать не более 20 символов.")))'
+
+  - name: time_zone
+    type: int
+    nullable: true
+    check: time_zone BETWEEN 1 AND 11
+    comment: Russian settlement time-zone code (FFD tag 1011).
+    valibot: 'v.nullable(v.picklist(fiscalTimeZoneOptions.map(({ value }) => value), "Выберите часовую зону."))'
+
+  - name: send_settlement_details
+    type: bool
+    dbRequired: true
+    default: "false"
+    comment: Send configured settlement details with each receipt.
+
   - name: internet_payment
     type: bool
     required: true
@@ -282,7 +303,7 @@ frontend:
   title: Фискальные профили
   schemaImports:
     - from: "@/forms/fiscalProfileOptions"
-      names: [fiscalTaxSystemOptions, fiscalVatOptions, fiscalPaymentMethodOptions]
+      names: [fiscalTaxSystemOptions, fiscalVatOptions, fiscalPaymentMethodOptions, fiscalTimeZoneOptions]
   # FiscalProfileForm.vue renders the company reference and the numeric selects.
   form:
     enabled: true
@@ -342,6 +363,14 @@ frontend:
       - field: settlement_place
         label: Место расчётов
         component: text
+      - field: automatic_device_number
+        label: Номер автомата
+        component: text
+      - field: time_zone
+        label: Часовая зона
+      - field: send_settlement_details
+        label: Передавать реквизиты расчёта в каждом чеке
+        default: false
       - field: internet_payment
         label: Расчёт в интернете
       - field: suppress_print
