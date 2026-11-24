@@ -8,8 +8,8 @@ permissionPrefix: terminalCommand
 serviceName: AdminTerminalCommand
 sessionRequired: true
 crudNotifications: false
-service:
-  manualMethods: [list, detail]
+httpRoutes:
+  enabled: false
 keys:
   - name: id
     pathName: command_id

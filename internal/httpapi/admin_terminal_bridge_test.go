@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dronm/pronogti/internal/adminauth"
 	"github.com/dronm/pronogti/internal/terminalbridge"
@@ -95,12 +96,35 @@ func newTerminalAdminHTTP(t *testing.T, store *terminalAdminStub) (http.Handler,
 	t.Helper()
 	auth := &terminalAdminAuth{adminTestService: &adminTestService{}}
 	sessions := NewAdminSessions(&adminTestManager{}, websession.Config{CookieName: "admin_test", HTTPOnly: true, SameSite: http.SameSiteLaxMode, MaxLifeTime: 3600, MaxIdleTime: 600}, "/", auth.Invalidate)
-	handler := NewAdminHandler(auth, sessions, AdminHTTPOptions{AllowedOrigins: []string{"http://localhost:5174"}, TerminalBridge: store})
+	generated, permissions, err := NewGeneratedAdminHandler(auth, nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	handler := NewAdminHandler(auth, sessions, AdminHTTPOptions{
+		AllowedOrigins: []string{"http://localhost:5174"}, TerminalBridge: store,
+		GeneratedRoutes: generated, GeneratedPermissions: permissions,
+	})
 	login := adminRequest(handler, http.MethodPost, "/admin/login", `{"name":"admin","pwd":"password"}`, nil, "")
 	if login.Code != http.StatusOK {
 		t.Fatalf("login: %d %s", login.Code, login.Body)
 	}
 	return handler, login.Result().Cookies()[0], adminTestResponse().Auth.Token, auth
+}
+
+func TestGeneratedAdminLeavesTerminalRoutesToBridge(t *testing.T) {
+	generated, _, err := NewGeneratedAdminHandler(&adminTestService{}, nil, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{
+		"/admin/payment-terminals", "/admin/payment-terminals/1",
+		"/admin/terminal-agents", "/admin/terminal-agents/agent-1",
+		"/admin/terminal-commands", "/admin/terminal-commands/" + terminalAdminCommandID,
+	} {
+		if got := adminRequest(generated, http.MethodGet, path, "", nil, ""); got.Code != http.StatusNotFound {
+			t.Errorf("generated router claimed GET %s: status %d, want 404", path, got.Code)
+		}
+	}
 }
 
 func TestTerminalAdministrationRequiresAdminSessionAndMutationNonce(t *testing.T) {

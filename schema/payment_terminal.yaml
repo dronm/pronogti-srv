@@ -8,8 +8,8 @@ permissionPrefix: paymentTerminal
 serviceName: AdminPaymentTerminal
 sessionRequired: true
 crudNotifications: false
-service:
-  manualMethods: [list, detail]
+httpRoutes:
+  enabled: false
 keys:
   - name: id
     pathName: id

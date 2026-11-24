@@ -4,12 +4,16 @@ package services
 
 func RegisterGeneratedServices() {
 	RegisterCompanyService()
+	RegisterFiscalCorrectionService()
 	RegisterFiscalProfileService()
 	RegisterKioskService()
 	RegisterPaymentAttemptService()
 	RegisterPaymentEventService()
 	RegisterPaymentOrderService()
 	RegisterPaymentProfileService()
+	RegisterPaymentTerminalService()
 	RegisterSalonService()
+	RegisterTerminalAgentService()
+	RegisterTerminalCommandService()
 	RegisterYClientsProfileService()
 }

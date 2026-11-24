@@ -135,7 +135,7 @@ The following routes require the existing administrator session. Writes also req
 
 Agent creation accepts `id`, `company_id`, `kiosk_id`, `environment` and `enabled`. Terminal registration accepts `agent_id`, `company_id`, `kiosk_id`, `payment_profile_id`, `terminal_id`, `bank_terminal_id`, `physical_id` and `enabled`. The backend validates scope and environment relationships; naming an existing kiosk or profile is not sufficient authorization by itself.
 
-There are no history-deleting endpoints. New `schema/terminal_agent.yaml`, `schema/payment_terminal.yaml` and `schema/terminal_command.yaml` files provide read-only model metadata with manual service methods and frontend scaffolding disabled. Tokens and token hashes are deliberately absent from this metadata.
+The terminal agent, payment terminal and terminal command schemas generate read-only catalogue services with callable `List` and `Detail` methods. Each schema sets `httpRoutes.enabled` to `false` so the handwritten administrator handlers own the routes above. The catalogue models omit agent credentials.
 
 ## Server administration CLI
 
