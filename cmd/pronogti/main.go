@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dronm/pronogti/internal/config"
+	"github.com/dronm/pronogti/internal/deployupdate"
 	"github.com/dronm/pronogti/internal/fiscal"
 	"github.com/dronm/pronogti/internal/httpapi"
 	"github.com/dronm/pronogti/internal/kiosk"
@@ -23,8 +24,10 @@ import (
 	"github.com/dronm/pronogti/internal/terminalbridge"
 	"github.com/dronm/webapp"
 	"github.com/dronm/webapp/database"
+	"github.com/dronm/webapp/events"
 	weblogger "github.com/dronm/webapp/logger"
 	websession "github.com/dronm/webapp/session"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 var (
@@ -72,6 +75,19 @@ func run() error {
 		return fmt.Errorf("open kiosk database: %w", err)
 	}
 	defer db.Close()
+	listenerConfig, err := pgxpool.ParseConfig(dbConfig.GetPrimary())
+	if err != nil {
+		return fmt.Errorf("configure deployment listener: %w", err)
+	}
+	// LISTEN holds a connection for the lifetime of the process.
+	listenerConfig.MaxConns = 1
+	listenerConfig.MinConns = 0
+	listenerConfig.MinIdleConns = 0
+	listenerPool, err := pgxpool.NewWithConfig(context.Background(), listenerConfig)
+	if err != nil {
+		return fmt.Errorf("open deployment listener: %w", err)
+	}
+	defer listenerPool.Close()
 	redisConfig, err := cfg.Session.Redis.Resolve()
 	if err != nil {
 		return err
@@ -101,6 +117,14 @@ func run() error {
 			slog.Error("background worker shutdown timed out; unfinished operations retain their journal identities", "error", err)
 		}
 	}()
+	deploymentOrigins := append(append([]string(nil), cfg.CORS.AllowedOrigins...), cfg.Admin.AllowedOrigins...)
+	deploymentSocket := deployupdate.NewSocket(workers.ctx, db, deploymentOrigins)
+	deploymentEvents := events.NewServer(events.Config{Pool: listenerPool, Publisher: deploymentSocket})
+	deploymentEvents.AddEvent(deployupdate.Event)
+	workers.Start("deployment notifications", func(ctx context.Context) error {
+		deploymentEvents.Serve(ctx)
+		return nil
+	})
 	confirmationRepository := payment.NewPostgresRepository(db)
 	if cfg.TerminalBridge.Enabled {
 		workers.Start("terminal command expiry", terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)).RunExpiry)
@@ -185,6 +209,9 @@ func run() error {
 	defer closeAdministrator()
 	handler := httpapi.WithTerminalBridge(httpapi.WithTochkaWebhook(httpapi.WithAdministrator(router, administrator), webhook),
 		httpapi.NewTerminalBridgeHandler(terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)), time.Duration(cfg.TerminalBridge.MaxPollSeconds)*time.Second))
+	mux := http.NewServeMux()
+	mux.Handle("GET /deployments/ws", deploymentSocket)
+	mux.Handle("/", handler)
 
 	readTimeout, err := cfg.HTTPReadTimeout()
 	if err != nil {
@@ -204,7 +231,7 @@ func run() error {
 	}
 	server := &http.Server{
 		Addr:              cfg.HTTP.Addr,
-		Handler:           handler,
+		Handler:           mux,
 		ReadHeaderTimeout: readTimeout,
 		ReadTimeout:       readTimeout,
 		WriteTimeout:      writeTimeout,

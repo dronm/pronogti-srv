@@ -52,7 +52,7 @@ func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgr
 		AllowedOrigins: cfg.Admin.AllowedOrigins, RequestTimeout: requestTimeout,
 		KKT:     fiscal.NewKKTService(fiscalProfiles, cfg.Fiscal.AllowLive),
 		Shifts:  fiscal.NewShiftService(fiscalProfiles, fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive),
-		Version: Version, Commit: Commit, BuildDate: BuildDate,
+		Version: Version, Commit: Commit, BuildDate: BuildDate, AboutDB: db,
 		Navigation: adminnav.NewService(db), GeneratedRoutes: generated, GeneratedPermissions: permissions,
 	}
 	correctionLocation, err := cfg.Fiscal.CorrectionLocation()

@@ -16,6 +16,39 @@ separate_paths() {
 	[[ $1 != "$2" && $1 != "$2/"* && $2 != "$1/"* ]]
 }
 
+load_primary_database() {
+	local config_file=$1 env_file=$2
+	unset DB_CONN
+	if [[ -n $env_file ]]; then
+		[[ -r $env_file ]] || fail "Cannot read migration environment: $env_file"
+		set -a
+		source "$env_file"
+		set +a
+	fi
+	if [[ -z ${DB_CONN:-} ]]; then
+		command -v python3 >/dev/null || fail 'Python 3 is required to read the database URL from JSON; alternatively set DB_CONN in REMOTE_DB_ENV_FILE.'
+		DB_CONN=$(python3 - "$config_file" <<'PY'
+import json
+import os
+import sys
+
+try:
+	with open(sys.argv[1], encoding="utf-8-sig") as stream:
+		config = json.load(stream)
+	database = config.get("database", {})
+	value = database.get("primary") or os.environ.get(database.get("primary_env", "PRONOGTI_DATABASE_URL"), "")
+	if not isinstance(value, str) or not value.strip():
+		raise ValueError("database.primary or its primary_env environment variable must contain the primary PostgreSQL URL")
+	print(value)
+except (OSError, ValueError, TypeError, AttributeError) as error:
+	print("Cannot resolve migration database: " + str(error), file=sys.stderr)
+	sys.exit(1)
+PY
+		) || fail 'Configure the primary database URL in the remote JSON config or REMOTE_DB_ENV_FILE.'
+	fi
+	[[ $DB_CONN == postgres://* || $DB_CONN == postgresql://* ]] || fail 'DB_CONN must be a PostgreSQL URL.'
+}
+
 action=${1:-}
 shift || fail 'An action is required.'
 case "$action" in
@@ -41,37 +74,35 @@ case "$action" in
 		env_file=$3
 		migration_bin=$4
 		command -v "$migration_bin" >/dev/null || fail "Cannot find migration command: $migration_bin"
-		unset DB_CONN
-		if [[ -n $env_file ]]; then
-			[[ -r $env_file ]] || fail "Cannot read migration environment: $env_file"
-			set -a
-			source "$env_file"
-			set +a
-		fi
-		if [[ -z ${DB_CONN:-} ]]; then
-			command -v python3 >/dev/null || fail 'Python 3 is required to read the database URL from JSON; alternatively set DB_CONN in REMOTE_DB_ENV_FILE.'
-			DB_CONN=$(python3 - "$config_file" <<'PY'
-import json
-import os
-import sys
-
-try:
-	with open(sys.argv[1], encoding="utf-8-sig") as stream:
-		config = json.load(stream)
-	database = config.get("database", {})
-	value = database.get("primary") or os.environ.get(database.get("primary_env", "PRONOGTI_DATABASE_URL"), "")
-	if not isinstance(value, str) or not value.strip():
-		raise ValueError("database.primary or its primary_env environment variable must contain the primary PostgreSQL URL")
-	print(value)
-except (OSError, ValueError, TypeError, AttributeError) as error:
-	print("Cannot resolve migration database: " + str(error), file=sys.stderr)
-	sys.exit(1)
-PY
-			) || fail 'Configure the primary database URL in the remote JSON config or REMOTE_DB_ENV_FILE.'
-		fi
-		[[ $DB_CONN == postgres://* || $DB_CONN == postgresql://* ]] || fail 'golang-migrate requires DB_CONN to be a PostgreSQL URL.'
+		load_primary_database "$config_file" "$env_file"
 		if [[ $action == migrate ]]; then
 			"$migration_bin" -path "$migration_dir" -database "$DB_CONN" up
+		fi
+		exit 0
+		;;
+	prepare-deploy-update|complete-deploy-update)
+		load_primary_database "$1" "$2"
+		command -v psql >/dev/null || fail 'psql is required on the migration host to record deployments.'
+		args=(-X --no-password --set=ON_ERROR_STOP=1 --set=release_id="$3" --dbname="$DB_CONN")
+		if [[ $action == prepare-deploy-update ]]; then
+			psql "${args[@]}" --set=admin="$4" --set=kiosk="$5" >/dev/null <<'SQL'
+EXPLAIN UPDATE public.deploy_updates SET updated_at = clock_timestamp() WHERE release_id = :'release_id';
+INSERT INTO public.deploy_updates (release_id, admin, kiosk)
+VALUES (:'release_id', :'admin'::boolean, :'kiosk'::boolean)
+ON CONFLICT (release_id) DO NOTHING;
+SQL
+		else
+			recorded=$(psql "${args[@]}" -At <<'SQL'
+WITH deployed AS (
+	UPDATE public.deploy_updates SET updated_at = coalesce(updated_at, clock_timestamp())
+	WHERE release_id = :'release_id' RETURNING release_id, admin, kiosk
+)
+SELECT release_id, CASE WHEN admin OR kiosk THEN
+	pg_notify('DeployUpdate.Insert', json_build_object('result', json_build_object('release_id', release_id))::text)::text
+END FROM deployed;
+SQL
+			)
+			[[ ${recorded%%|*} == "$3" ]] || fail 'No matching deployment record.'
 		fi
 		exit 0
 		;;

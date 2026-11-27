@@ -17,9 +17,9 @@ API_BASE_URL ?= http://127.0.0.1:59000
 
 -include $(ROOT_DIR).env
 
-VERSION ?= dev
 COMMIT ?= $(shell git -C "$(ROOT_DIR)" rev-parse --short HEAD 2>/dev/null || printf 'none')
 BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+VERSION ?= $(if $(filter-out none,$(strip $(COMMIT))),$(COMMIT),build-$(BUILD_DATE))
 
 .DEFAULT_GOAL := build
 

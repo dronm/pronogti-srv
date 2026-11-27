@@ -56,14 +56,15 @@ not a link into a release.
 	coreutils and systemd. The SSH user must be able to write the application and
 	release directories. Enable noninteractive SSH access from this same user.
 
-6. The migration host, by default the first entry in `SERVERS`, needs
-	`golang-migrate` with PostgreSQL support. Set `MIGRATE_BIN` to its full path if
+6. The migration host, by default the first entry in `SERVERS`, needs `psql`
+	to record deployments and `golang-migrate` with PostgreSQL support. Set `MIGRATE_BIN` to its full path if
 	it is absent from the SSH login PATH. The complete `migrations/` tree is copied
 	to every server; `migrate up` runs once against the shared primary database.
 	`migrations/sql/` contains manual helpers and is never executed automatically.
 
 7. Configure nginx to serve the kiosk at `/`, the administrator at `/admin/`,
-	and proxy `/api/` to the backend with that prefix removed. See
+	and proxy `/api/` to the backend with that prefix removed. Include the
+	`/api/deployments/ws` upgrade location and the uncached SPA entry pages. See
 	[nginx.locations.example](nginx.locations.example). The example belongs inside
 	your existing TLS server block; adapt it to your existing configuration.
 
@@ -153,6 +154,26 @@ The normal flow always builds first. Build output is snapshotted locally before
 any SSH operation. Relative frontend project paths and `BACKEND_BINARY` resolve
 against the backend checkout; relative frontend output paths resolve against
 their frontend project.
+
+### About and frontend updates
+
+Deploy the updated backend and both frontends once with migration
+`000027_deploy_updates`. The deployment script stamps the release ID into each
+staged `index.html`, including when you use `--skip-build`. Every completed
+deployment records its timestamp in `public.deploy_updates`. The admin’s shared
+About dialog shows this time, PostgreSQL and migration information, and the
+running backend’s build metadata.
+
+Once all selected components are active on every server, the script records
+completion on the shared primary and publishes `DeployUpdate.Insert`. An admin
+release opens the shared reload/reminder dialog in signed-in admin tabs. A kiosk
+release reloads the open kiosk page immediately, including during a checkout.
+Reconnects and periodic server-side checks use the same stored record to catch
+missed events. Backend-only and migrations-only deployments update About.
+
+If the database roles differ, the migration/deploy role needs `SELECT`,
+`INSERT`, `UPDATE` and sequence usage for `deploy_updates`. The app role needs
+`SELECT` on `deploy_updates` and `schema_migrations`.
 
 ## Rollout and recovery
 

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dronm/ds/v4"
 	"github.com/dronm/pronogti/internal/adminauth"
 	"github.com/dronm/session"
 	"github.com/dronm/webapp"
@@ -30,6 +31,7 @@ type AdminHTTPOptions struct {
 	AllowedOrigins             []string
 	RequestTimeout             time.Duration
 	Version, Commit, BuildDate string
+	AboutDB                    ds.Provider
 	Navigation                 AdminNavigation
 	Refunds                    AdminRefunds
 	Shifts                     FiscalShifts
@@ -209,13 +211,6 @@ func (h *adminHandler) permissions(w http.ResponseWriter, r *http.Request) {
 			"paymentTerminal.list", "paymentTerminal.detail", "paymentTerminal.create", "paymentTerminal.update", "terminalCommand.list", "terminalCommand.detail", "terminalCommand.resolve")
 	}
 	_ = webapp.WriteJSON(w, http.StatusOK, permissions)
-}
-
-func (h *adminHandler) about(w http.ResponseWriter, r *http.Request) {
-	if !h.requireRead(w, r) {
-		return
-	}
-	_ = webapp.WriteJSON(w, http.StatusOK, map[string]any{"name": "Pronogti", "author": map[string]string{"name": "", "email": ""}, "db": nil, "updated_at": time.Now().UTC(), "backend": map[string]string{"version": h.options.Version, "build_date": h.options.BuildDate, "commit": h.options.Commit, "ip": ""}})
 }
 
 func decodeAdminJSON(w http.ResponseWriter, r *http.Request, value any) error {

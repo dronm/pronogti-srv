@@ -244,6 +244,11 @@ build_frontend() {
 	mkdir -- "${artifacts[$component]}"
 	# Snapshot immediately so the next frontend build cannot change this artifact.
 	cp -a -- "$output/." "${artifacts[$component]}/"
+	local index=${artifacts[$component]}/index.html
+	local release_meta="<meta name=\"pronogti-release\" content=\"$release_id\">"
+	sed -i -e 's|<meta name="pronogti-release" content="[^"]*">||g' \
+		-e "s|</head>|$release_meta</head>|I" "$index"
+	[[ $(<"$index") == *"$release_meta"* ]] || die "Cannot stamp the release ID in $component/index.html."
 }
 
 # Complete all local builds before connecting to production.
@@ -291,6 +296,11 @@ done
 if [[ $run_migrations == true ]]; then
 	remote_run "$migration_host" migrate "$release_root/migrations" "$REMOTE_CONFIG_FILE" "$env_file" "$migrate_bin"
 fi
+notify_admin=false
+notify_kiosk=false
+if [[ ${artifacts[admin]+built} ]]; then notify_admin=true; fi
+if [[ ${artifacts[kiosk]+built} ]]; then notify_kiosk=true; fi
+remote_run "$migration_host" prepare-deploy-update "$REMOTE_CONFIG_FILE" "$env_file" "$release_id" "$notify_admin" "$notify_kiosk"
 for component in "${components[@]}"; do
 	for server in "${SERVERS[@]}"; do
 		attempted_servers+=("$server")
@@ -299,4 +309,6 @@ for component in "${components[@]}"; do
 	done
 done
 rollout_complete=true
+remote_run "$migration_host" complete-deploy-update "$REMOTE_CONFIG_FILE" "$env_file" "$release_id" ||
+	die "Release $release_id is active, but its deployment record could not be confirmed."
 printf 'Deployed release %s\n' "$release_id"
