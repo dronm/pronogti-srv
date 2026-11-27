@@ -54,14 +54,16 @@ func registerServices(cfg *config.Config, registry kiosk.Registry, salons salon.
 	settlementProvider := services.NewSettlementProvider(backend)
 	backend.SetPaidVisitLookup(settlements.HeldPaidVisits)
 	httpapi.ConfigurePaymentProfileCredentials(paymentTokens)
+	paymentRepository := payment.NewPostgresRepository(db)
 	httpapi.RegisterServices(backend, registry, kiosk.Options{CustomerMaxLifeTime: cfg.Session.CustomerMaxLifeTime, CustomerMaxIdleTime: cfg.Session.CustomerMaxIdleTime, Salons: salons}, httpapi.CheckoutDependencies{
-		TerminalBridge:  terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)),
-		TerminalEnabled: cfg.TerminalBridge.Enabled,
-		Shifts:          &httpapi.ShiftDependencies{Service: fiscal.NewShiftService(fiscal.NewPostgresRepository(db), fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive), OperatorToken: cfg.Fiscal.ShiftOperatorToken},
-		Provider:        services.NewCheckoutProvider(backend), Repository: checkout.NewPostgresRepository(db), MaxLifeTime: cfg.Checkout.MaxLifeTime,
+		OnlineCardEnabled: paymentRepository.OnlineCardEnabled,
+		TerminalBridge:    terminalbridge.NewRepository(db, terminalBridgeOptions(cfg)),
+		TerminalEnabled:   cfg.TerminalBridge.Enabled,
+		Shifts:            &httpapi.ShiftDependencies{Service: fiscal.NewShiftService(fiscal.NewPostgresRepository(db), fiscal.HTTPDriver{}, cfg.Fiscal.AllowLive), OperatorToken: cfg.Fiscal.ShiftOperatorToken},
+		Provider:          services.NewCheckoutProvider(backend), Repository: checkout.NewPostgresRepository(db), MaxLifeTime: cfg.Checkout.MaxLifeTime,
 		ValidateOrder: fiscal.NewPostgresRepository(db).ValidateCheckout,
 		Payment: &payment.Dependencies{
-			Repository:   payment.NewPostgresRepository(db),
+			Repository:   paymentRepository,
 			Bank:         &payment.SDKBank{MockExternal: cfg.Payments.MockExternal},
 			CardBank:     &payment.SDKCardBank{MockExternal: cfg.Payments.MockExternal},
 			Tokens:       paymentTokens,

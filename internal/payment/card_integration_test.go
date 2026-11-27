@@ -67,6 +67,41 @@ func cardIntegrationDue(t *testing.T, conn *pgx.Conn, id string) {
 	}
 }
 
+func TestCardIntegrationKioskAvailabilityUsesEffectiveProfile(t *testing.T) {
+	provider, conn := completionTestDatabase(t)
+	ctx := context.Background()
+	const companyID = 781898
+	kioskProfileID := completionProfile(t, conn, companyID, "mock")
+	cardIntegrationProfile(t, conn, "http://127.0.0.1:8099")
+
+	var kioskID int64
+	if err := conn.QueryRow(ctx, `INSERT INTO public.kiosks (name,company_id,token_hash)
+		VALUES ('Test kiosk',$1,repeat('a',64)) RETURNING id`, companyID).Scan(&kioskID); err != nil {
+		t.Fatal(err)
+	}
+	repository := NewPostgresRepository(provider)
+	check := func(step string, want bool) {
+		t.Helper()
+		enabled, err := repository.OnlineCardEnabled(ctx, companyID, &kioskID)
+		if err != nil || enabled != want {
+			t.Fatalf("%s: online card enabled = %v, want %v (err=%v)", step, enabled, want, err)
+		}
+	}
+	check("salon default allows online cards", true)
+	if _, err := conn.Exec(ctx, `UPDATE public.kiosks SET payment_profile_id=$1 WHERE id=$2`, kioskProfileID, kioskID); err != nil {
+		t.Fatal(err)
+	}
+	check("kiosk profile overrides enabled salon default", false)
+	if _, err := conn.Exec(ctx, `UPDATE public.payment_profiles SET cards_enabled=true, acquiring_merchant_id=$2 WHERE id=$1`, kioskProfileID, cardIntegrationMerchant); err != nil {
+		t.Fatal(err)
+	}
+	check("online card enabled on kiosk profile", true)
+	if _, err := conn.Exec(ctx, `UPDATE public.payment_profiles SET enabled=false WHERE id=$1`, kioskProfileID); err != nil {
+		t.Fatal(err)
+	}
+	check("disabled kiosk profile does not fall back to salon", false)
+}
+
 func TestCardIntegrationIndependentDemoCompletion(t *testing.T) {
 	provider, conn := completionTestDatabase(t)
 	cardIntegrationProfile(t, conn, "http://127.0.0.1:8099")

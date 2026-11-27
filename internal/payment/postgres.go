@@ -31,15 +31,37 @@ const lockOrderSQL = `SELECT company_id,COALESCE(kiosk_id,0),entry_mode,COALESCE
 	scope_hash,customer_session_hash,state,expires_at,payable_kopecks,currency
 	FROM public.payment_orders WHERE id=$1 FOR UPDATE`
 
-const profileForOrderSQL = `SELECT p.id,p.company_id,p.config_version,p.name,p.environment,p.api_base_url,
-	COALESCE(p.jwt_env,'') AS jwt_env,p.jwt_ciphertext,COALESCE(p.client_id,'') AS client_id,COALESCE(p.customer_code,'') AS customer_code,
-	COALESCE(p.sbp_merchant_id,'') AS sbp_merchant_id,COALESCE(p.account_id,'') AS account_id,p.qr_ttl_minutes,p.http_timeout_seconds,p.enabled,
-	p.cards_enabled,COALESCE(p.acquiring_merchant_id,''),p.card_ttl_minutes,COALESCE(p.card_redirect_url,''),COALESCE(p.card_fail_redirect_url,'')
-	FROM public.payment_profiles p WHERE p.company_id=$1 AND p.id=(
+const effectiveProfileSourceSQL = ` FROM public.payment_profiles p WHERE p.company_id=$1 AND p.id=(
 		SELECT COALESCE(k.payment_profile_id,s.default_payment_profile_id)
 		FROM public.salons s LEFT JOIN public.kiosks k ON k.id=$2 AND k.company_id=s.company_id
 		WHERE s.company_id=$1
-	) FOR SHARE OF p`
+	)`
+
+const profileForOrderSQL = `SELECT p.id,p.company_id,p.config_version,p.name,p.environment,p.api_base_url,
+	COALESCE(p.jwt_env,'') AS jwt_env,p.jwt_ciphertext,COALESCE(p.client_id,'') AS client_id,COALESCE(p.customer_code,'') AS customer_code,
+	COALESCE(p.sbp_merchant_id,'') AS sbp_merchant_id,COALESCE(p.account_id,'') AS account_id,p.qr_ttl_minutes,p.http_timeout_seconds,p.enabled,
+	p.cards_enabled,COALESCE(p.acquiring_merchant_id,''),p.card_ttl_minutes,COALESCE(p.card_redirect_url,''),COALESCE(p.card_fail_redirect_url,'')` +
+	effectiveProfileSourceSQL + ` FOR SHARE OF p`
+
+// OnlineCardEnabled reports the administrative setting for the same profile
+// used when reserving card and SBP payments.
+func (r *PostgresRepository) OnlineCardEnabled(ctx context.Context, companyID int64, kioskID *int64) (bool, error) {
+	conn, release, err := r.connection(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer release()
+
+	var enabled bool
+	err = conn.QueryRow(ctx, `SELECT p.enabled AND p.cards_enabled`+effectiveProfileSourceSQL, companyID, kioskID).Scan(&enabled)
+	if errors.Is(err, ds.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read online card setting: %w", err)
+	}
+	return enabled, nil
+}
 
 const insertAttemptSQL = `INSERT INTO public.payments AS p (
 	id,order_id,company_id,payment_profile_id,environment,amount_kopecks,currency,state,

@@ -39,14 +39,15 @@ type service struct {
 // CheckoutDependencies are optional for callers that use only the session API.
 // Runtime wiring always supplies the durable store and fresh YClients provider.
 type CheckoutDependencies struct {
-	Shifts          *ShiftDependencies
-	Provider        checkout.Provider
-	Repository      checkout.Repository
-	MaxLifeTime     int64
-	ValidateOrder   func(context.Context, checkout.Order) error
-	Payment         *payment.Dependencies
-	TerminalBridge  TerminalBridgePayments
-	TerminalEnabled bool
+	Shifts            *ShiftDependencies
+	Provider          checkout.Provider
+	Repository        checkout.Repository
+	MaxLifeTime       int64
+	ValidateOrder     func(context.Context, checkout.Order) error
+	Payment           *payment.Dependencies
+	OnlineCardEnabled func(context.Context, int64, *int64) (bool, error)
+	TerminalBridge    TerminalBridgePayments
+	TerminalEnabled   bool
 }
 
 func RegisterServices(backend Backend, registry kiosk.Registry, options kiosk.Options, checkoutOptions ...CheckoutDependencies) {
