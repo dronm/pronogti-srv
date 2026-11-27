@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dronm/pronogti/internal/appconstants"
 	"github.com/dronm/pronogti/internal/config"
 	"github.com/dronm/pronogti/internal/deployupdate"
 	"github.com/dronm/pronogti/internal/fiscal"
@@ -75,6 +76,15 @@ func run() error {
 		return fmt.Errorf("open kiosk database: %w", err)
 	}
 	defer db.Close()
+	projectConstants, err := appconstants.Open(context.Background(), db, dbConfig.GetPrimary())
+	if err != nil {
+		return fmt.Errorf("initialize application constants (apply database migrations first): %w", err)
+	}
+	defer func() {
+		if err := projectConstants.Close(context.Background()); err != nil {
+			slog.Error("close application constants", "error", err)
+		}
+	}()
 	listenerConfig, err := pgxpool.ParseConfig(dbConfig.GetPrimary())
 	if err != nil {
 		return fmt.Errorf("configure deployment listener: %w", err)
@@ -202,7 +212,7 @@ func run() error {
 		httpapi.SalonScopeMiddleware(),
 	}
 	router := webapp.MustBuildRouter(appContext, httpapi.BuildRoutes(), middlewares...)
-	administrator, closeAdministrator, err := configuredAdministrator(cfg, db, workers, paymentTokens)
+	administrator, closeAdministrator, err := configuredAdministrator(cfg, db, workers, paymentTokens, projectConstants.Manager)
 	if err != nil {
 		return err
 	}

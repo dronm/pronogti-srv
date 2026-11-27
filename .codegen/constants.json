@@ -1,0 +1,21 @@
+{
+	"version": 1,
+	"files": [
+		{
+			"path": "internal/appconstants/constants.gen.go",
+			"sha256": "d22e7d9841ae0c9df536b8b8a5be2533ad4ca7bc8a3201dd4805d27f4d307111"
+		},
+		{
+			"path": "internal/appconstants/maxBonusPaymentPercent.gen.go",
+			"sha256": "de2039d0478fdddc7c04f09f583988e318ac9b56a62c40f90852374b159de45d"
+		},
+		{
+			"path": "internal/httpapi/constant.gen.go",
+			"sha256": "a64f3f4907b7d21fa34fec648821ca26246d78bff0f49b0774c90ac40fb4c4d1"
+		},
+		{
+			"path": "internal/services/constant.gen.go",
+			"sha256": "1995e3a89685eea7db842e3ec34dae7541056d4df823f9c99af67cee0d3dfc74"
+		}
+	]
+}

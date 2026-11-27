@@ -43,7 +43,8 @@ func (s *service) checkoutActor(ctx context.Context, nonce string) (checkout.Act
 	}
 	actor := checkout.Actor{
 		CompanyID: scope.CompanyID, Mode: scope.Mode, ScopeID: scope.ScopeID,
-		CustomerSessionID: customer.SessionID, ClientID: customer.ClientID, Guest: customer.Guest, Contact: customer.Phone,
+		CustomerSessionID: customer.SessionID, ClientID: customer.ClientID, Guest: customer.Guest,
+		CustomerName: customer.Name, Contact: customer.Phone,
 	}
 	if scope.Kiosk != nil {
 		id := scope.Kiosk.ID

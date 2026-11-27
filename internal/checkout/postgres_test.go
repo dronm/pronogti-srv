@@ -72,7 +72,7 @@ func (r repositoryTestRow) Scan(dest ...any) error {
 		r.order.VisitID, r.order.RecordID, snapshot, r.order.SubtotalKopecks,
 		r.order.BonusKopecks, r.order.PayableKopecks, r.order.Currency, r.order.State,
 		r.order.IdempotencyKey, r.order.RequestHash, r.order.ExpiresAt, r.order.CreatedAt,
-		r.order.UpdatedAt, r.order.YClientsSyncStatus, r.order.CustomerContact,
+		r.order.UpdatedAt, r.order.YClientsSyncStatus, r.order.CustomerContact, r.order.CustomerName,
 	}
 	if len(values) != len(dest) {
 		return errors.New("unexpected checkout projection")
@@ -104,6 +104,7 @@ func TestPostgresRoundTripPreservesMoneyAndNullableIdentity(t *testing.T) {
 				id := int64(5)
 				order.Owner.KioskID, order.Owner.Mode, order.Owner.ClientID = &id, "kiosk", 71
 				order.VisitID, order.RecordID = 22, 33
+				order.CustomerName = "Test Customer"
 			}
 			conn := &repositoryTestConn{row: repositoryTestRow{order: order}}
 			provider := &repositoryTestProvider{conn: conn}
@@ -111,8 +112,11 @@ func TestPostgresRoundTripPreservesMoneyAndNullableIdentity(t *testing.T) {
 			if err != nil || !reflect.DeepEqual(got, order) || provider.releases != 1 {
 				t.Fatalf("round trip=%+v releases=%d error=%v", got, provider.releases, err)
 			}
-			if len(conn.args) != 22 {
+			if len(conn.args) != 23 {
 				t.Fatalf("unexpected insert argument count %d", len(conn.args))
+			}
+			if conn.args[22] != order.CustomerName {
+				t.Fatal("checkout did not store the customer name")
 			}
 			if !device && (conn.args[2] != (*int64)(nil) || conn.args[4] != nil || conn.args[7] != nil || conn.args[8] != nil) {
 				t.Fatal("guest checkout stored zero foreign identifiers instead of SQL NULL")

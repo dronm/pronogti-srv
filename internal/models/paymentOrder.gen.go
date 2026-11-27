@@ -11,24 +11,26 @@ const paymentOrderRelation = "public.admin_payment_orders_list"
 
 // Read-only administrator projection.
 type PaymentOrder struct {
-	ID                 string     `json:"id" primaryKey:"true"`
-	CompanyID          int64      `json:"company_id"`
-	SalonName          string     `json:"salon_name"`
-	KioskID            *int64     `json:"kiosk_id"`
-	KioskName          *string    `json:"kiosk_name"`
-	EntryMode          string     `json:"entry_mode"`
-	PayableKopecks     int64      `json:"payable_kopecks"`
-	Currency           string     `json:"currency"`
-	State              string     `json:"state"`
-	CreatedAt          time.Time  `json:"created_at"`
-	PaymentID          *string    `json:"payment_id"`
-	PaymentMethod      *string    `json:"payment_method"`
-	PaymentState       *string    `json:"payment_state"`
-	Environment        *string    `json:"environment"`
-	PaidAt             *time.Time `json:"paid_at"`
-	BankReference      *string    `json:"bank_reference"`
-	YclientsSyncStatus string     `json:"yclients_sync_status"`
-	FiscalStatus       string     `json:"fiscal_status"`
+	ID                 string               `json:"id" primaryKey:"true"`
+	CompanyID          int64                `json:"company_id"`
+	SalonName          string               `json:"salon_name"`
+	KioskID            *int64               `json:"kiosk_id"`
+	KioskName          *string              `json:"kiosk_name"`
+	ClientName         *string              `json:"client_name"`
+	ClientPhone        *string              `json:"client_phone"`
+	EntryMode          string               `json:"entry_mode"`
+	PayableKopecks     int64                `json:"payable_kopecks"`
+	Currency           string               `json:"currency"`
+	State              PaymentOrderState    `json:"state" enum:"payment_order_state"`
+	CreatedAt          time.Time            `json:"created_at"`
+	PaymentID          *string              `json:"payment_id"`
+	PaymentMethod      *PaymentMethod       `json:"payment_method" enum:"payment_method"`
+	PaymentState       *PaymentAttemptState `json:"payment_state" enum:"payment_attempt_state"`
+	Environment        *string              `json:"environment"`
+	PaidAt             *time.Time           `json:"paid_at"`
+	BankReference      *string              `json:"bank_reference"`
+	YclientsSyncStatus string               `json:"yclients_sync_status"`
+	FiscalStatus       string               `json:"fiscal_status"`
 }
 
 func (m PaymentOrder) Relation() string {
@@ -43,40 +45,40 @@ const paymentOrderDetailRelation = "public.admin_payment_orders_detail"
 
 // PaymentOrderDetail is the detail projection for payment orders.
 type PaymentOrderDetail struct {
-	ID                    string           `json:"id" primaryKey:"true"`
-	CompanyID             int64            `json:"company_id"`
-	SalonName             string           `json:"salon_name"`
-	KioskID               *int64           `json:"kiosk_id"`
-	KioskName             *string          `json:"kiosk_name"`
-	EntryMode             string           `json:"entry_mode"`
-	PayableKopecks        int64            `json:"payable_kopecks"`
-	Currency              string           `json:"currency"`
-	State                 string           `json:"state"`
-	CreatedAt             time.Time        `json:"created_at"`
-	PaymentID             *string          `json:"payment_id"`
-	PaymentMethod         *string          `json:"payment_method"`
-	PaymentState          *string          `json:"payment_state"`
-	Environment           *string          `json:"environment"`
-	PaidAt                *time.Time       `json:"paid_at"`
-	BankReference         *string          `json:"bank_reference"`
-	YclientsSyncStatus    string           `json:"yclients_sync_status"`
-	FiscalStatus          string           `json:"fiscal_status"`
-	ClientID              *int64           `json:"client_id"`
-	VisitID               *int64           `json:"visit_id"`
-	RecordID              *int64           `json:"record_id"`
-	ItemsSnapshot         []map[string]any `json:"items_snapshot"`
-	SubtotalKopecks       int64            `json:"subtotal_kopecks"`
-	BonusKopecks          int64            `json:"bonus_kopecks"`
-	ExpiresAt             time.Time        `json:"expires_at"`
-	UpdatedAt             time.Time        `json:"updated_at"`
-	YclientsErrorCode     *string          `json:"yclients_error_code"`
-	FiscalErrorCode       *string          `json:"fiscal_error_code"`
-	FiscalErrorMessage    *string          `json:"fiscal_error_message"`
-	FiscalResponsePayload map[string]any   `json:"fiscal_response_payload"`
-	YclientsCompletedAt   *time.Time       `json:"yclients_completed_at"`
-	FiscalCompletedAt     *time.Time       `json:"fiscal_completed_at"`
-	YclientsDocumentIds   *string          `json:"yclients_document_ids"`
-	FiscalDocumentNumber  *string          `json:"fiscal_document_number"`
+	ID                    string               `json:"id" primaryKey:"true"`
+	CompanyID             int64                `json:"company_id"`
+	SalonName             string               `json:"salon_name"`
+	KioskID               *int64               `json:"kiosk_id"`
+	KioskName             *string              `json:"kiosk_name"`
+	EntryMode             string               `json:"entry_mode"`
+	PayableKopecks        int64                `json:"payable_kopecks"`
+	Currency              string               `json:"currency"`
+	State                 PaymentOrderState    `json:"state" enum:"payment_order_state"`
+	CreatedAt             time.Time            `json:"created_at"`
+	PaymentID             *string              `json:"payment_id"`
+	PaymentMethod         *PaymentMethod       `json:"payment_method" enum:"payment_method"`
+	PaymentState          *PaymentAttemptState `json:"payment_state" enum:"payment_attempt_state"`
+	Environment           *string              `json:"environment"`
+	PaidAt                *time.Time           `json:"paid_at"`
+	BankReference         *string              `json:"bank_reference"`
+	YclientsSyncStatus    string               `json:"yclients_sync_status"`
+	FiscalStatus          string               `json:"fiscal_status"`
+	ClientID              *int64               `json:"client_id"`
+	VisitID               *int64               `json:"visit_id"`
+	RecordID              *int64               `json:"record_id"`
+	ItemsSnapshot         []map[string]any     `json:"items_snapshot"`
+	SubtotalKopecks       int64                `json:"subtotal_kopecks"`
+	BonusKopecks          int64                `json:"bonus_kopecks"`
+	ExpiresAt             time.Time            `json:"expires_at"`
+	UpdatedAt             time.Time            `json:"updated_at"`
+	YclientsErrorCode     *string              `json:"yclients_error_code"`
+	FiscalErrorCode       *string              `json:"fiscal_error_code"`
+	FiscalErrorMessage    *string              `json:"fiscal_error_message"`
+	FiscalResponsePayload map[string]any       `json:"fiscal_response_payload"`
+	YclientsCompletedAt   *time.Time           `json:"yclients_completed_at"`
+	FiscalCompletedAt     *time.Time           `json:"fiscal_completed_at"`
+	YclientsDocumentIds   *string              `json:"yclients_document_ids"`
+	FiscalDocumentNumber  *string              `json:"fiscal_document_number"`
 }
 
 func (m PaymentOrderDetail) Relation() string {

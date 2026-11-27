@@ -15,11 +15,13 @@ import (
 	"github.com/dronm/pronogti/internal/httpapi"
 	"github.com/dronm/pronogti/internal/payment"
 	"github.com/dronm/pronogti/internal/refund"
+	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/pronogti/internal/terminalbridge"
+	"github.com/dronm/webapp/constants"
 	websession "github.com/dronm/webapp/session"
 )
 
-func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgroundWorkers, paymentTokens payment.TokenSource) (http.Handler, func(), error) {
+func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgroundWorkers, paymentTokens payment.TokenSource, constantManager *constants.Manager) (http.Handler, func(), error) {
 	if !cfg.Admin.Enabled {
 		return nil, func() {}, nil
 	}
@@ -40,6 +42,10 @@ func configuredAdministrator(cfg *config.Config, db ds.Provider, workers *backgr
 		return nil, nil, err
 	}
 	service := adminauth.NewService(adminauth.NewPostgresRepository(db), adminauth.Options{MaxLifeTime: time.Duration(cfg.Admin.MaxLifeTime) * time.Second})
+	if err := services.RegisterConstantService(constantManager, httpapi.AdminConstantAuthorizer(service)); err != nil {
+		cleanup()
+		return nil, nil, fmt.Errorf("register constants service: %w", err)
+	}
 	sessions := httpapi.NewAdminSessions(manager.Core(), cfg.Admin.WebappConfig(cfg.Session), cfg.Admin.CookiePath, service.Invalidate)
 	generated, permissions, err := httpapi.NewGeneratedAdminHandler(service, db, requestTimeout)
 	if err != nil {

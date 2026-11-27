@@ -45,8 +45,9 @@ type Actor struct {
 	CustomerSessionID string
 	ClientID          int64
 	Guest             bool
-	// Contact comes from the identified server session, never checkout JSON.
-	Contact string
+	// Customer details come from the identified server session.
+	CustomerName string
+	Contact      string
 }
 
 // Owner stores hashes of interaction nonces, not the browser's session cookie.
@@ -86,6 +87,7 @@ type Order struct {
 	CreatedAt          time.Time `json:"created_at"`
 	UpdatedAt          time.Time `json:"updated_at"`
 	YClientsSyncStatus string    `json:"yclients_sync_status"`
+	CustomerName       string    `json:"-"`
 	CustomerContact    string    `json:"-"`
 }
 

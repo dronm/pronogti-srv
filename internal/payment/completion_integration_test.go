@@ -115,17 +115,21 @@ func completionProfile(t *testing.T, conn *pgx.Conn, companyID int64, environmen
 	return id
 }
 
-func completionOrder(t *testing.T, provider ds.Provider, actor checkout.Actor, key string) checkout.Order {
+func completionOrderFixture(t *testing.T, actor checkout.Actor, key string) checkout.Order {
 	t.Helper()
 	id, err := newAttemptID()
 	if err != nil {
 		t.Fatal(err)
 	}
 	now := time.Now().UTC()
-	order := checkout.Order{ID: id, Owner: ownerFor(actor), Items: []checkout.Item{{Selection: checkout.Selection{Source: checkout.SourceCatalog, Kind: checkout.KindGood, ID: 7, StaffID: 9, Quantity: "1"}, Title: "Integration good", UnitPriceKopecks: 12345, AmountKopecks: 12345}},
+	return checkout.Order{ID: id, Owner: ownerFor(actor), Items: []checkout.Item{{Selection: checkout.Selection{Source: checkout.SourceCatalog, Kind: checkout.KindGood, ID: 7, StaffID: 9, Quantity: "1"}, Title: "Integration good", UnitPriceKopecks: 12345, AmountKopecks: 12345}},
 		SubtotalKopecks: 12345, PayableKopecks: 12345, Currency: "RUB", State: "prepared", IdempotencyKey: key, RequestHash: strings.Repeat("b", 64),
 		CreatedAt: now, UpdatedAt: now, ExpiresAt: now.Add(15 * time.Minute), YClientsSyncStatus: "not_started", CustomerContact: "79990000000"}
-	stored, err := checkout.NewPostgresRepository(provider).Create(context.Background(), order)
+}
+
+func completionOrder(t *testing.T, provider ds.Provider, actor checkout.Actor, key string) checkout.Order {
+	t.Helper()
+	stored, err := checkout.NewPostgresRepository(provider).Create(context.Background(), completionOrderFixture(t, actor, key))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -478,32 +482,65 @@ func TestCompletionIntegrationFiscalClaimRecovery(t *testing.T) {
 	}
 }
 
+// seedMigration9Attempt prepares a pending payment in the historical schema.
+func seedMigration9Attempt(t *testing.T, conn *pgx.Conn, actor checkout.Actor, profileID int64, key, method string) (checkout.Order, string) {
+	t.Helper()
+	ctx := context.Background()
+	order := completionOrderFixture(t, actor, key)
+	items, err := json.Marshal(order.Items)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Seed the order using the columns available at migration 9.
+	if _, err := conn.Exec(ctx, `INSERT INTO public.payment_orders
+		(id,company_id,entry_mode,client_id,scope_hash,customer_session_hash,items_snapshot,
+		 subtotal_kopecks,payable_kopecks,idempotency_key,request_hash,expires_at,customer_contact,state)
+		VALUES ($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9,$10,$11,$12,$13,'payment_pending')`,
+		order.ID, order.Owner.CompanyID, order.Owner.Mode, order.Owner.ClientID,
+		order.Owner.ScopeHash, order.Owner.CustomerSessionHash, string(items),
+		order.SubtotalKopecks, order.PayableKopecks, order.IdempotencyKey, order.RequestHash,
+		order.ExpiresAt, order.CustomerContact); err != nil {
+		t.Fatal(err)
+	}
+	paymentID, err := newAttemptID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := conn.Exec(ctx, `INSERT INTO public.payments
+		(id,order_id,company_id,payment_profile_id,environment,amount_kopecks,state,idempotency_key,request_hash,method,qrc_id,acquiring_operation_id,profile_snapshot)
+		SELECT $1,$2,$3,p.id,'mock',$5,'pending',$6,$7,$8,
+			CASE WHEN $8='sbp' THEN $9::text END,CASE WHEN $8='card' THEN $9::text END,
+			to_jsonb(p) - 'jwt_env' - 'jwt_ciphertext'
+		FROM public.payment_profiles p WHERE p.id=$4`,
+		paymentID, order.ID, order.Owner.CompanyID, profileID, order.PayableKopecks,
+		method+":"+order.ID, order.RequestHash, method, "mock-"+paymentID); err != nil {
+		t.Fatal(err)
+	}
+	return order, paymentID
+}
+
 func TestCompletionIntegrationAtomicEnqueueAndMigrationRoundTrip(t *testing.T) {
 	// Test migrations 8/9 at their historical schema boundary. Newer admin views
 	// legitimately depend on their columns and must not be dropped with CASCADE.
 	provider, conn := completionTestDatabaseThrough(t, 9)
 	ctx := context.Background()
-	completionProfile(t, conn, 781898, "mock")
+	profileID := completionProfile(t, conn, 781898, "mock")
 	actor := checkout.Actor{CompanyID: 781898, Mode: "public", ClientID: 42, ScopeID: "scope-native", CustomerSessionID: "customer-native"}
-	order := completionOrder(t, provider, actor, "atomic-enqueue")
+	order, paymentID := seedMigration9Attempt(t, conn, actor, profileID, "atomic-enqueue", "sbp")
 	repository := NewPostgresRepository(provider)
-	view, err := NewService(Dependencies{Repository: repository, Bank: SDKBank{}}, Options{}).Init(ctx, actor, "qr:"+order.ID, order.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
 	// An enqueue failure must roll back the order, payment, audit and other
 	// follow-up job together; a later independent retry can settle the transfer.
 	if _, err := conn.Exec(ctx, `CREATE FUNCTION public.integration_reject_job() RETURNS trigger AS $$ BEGIN RAISE EXCEPTION 'test enqueue interruption'; END; $$ LANGUAGE plpgsql;
 		CREATE TRIGGER integration_reject_job BEFORE INSERT ON public.yclients_jobs FOR EACH ROW EXECUTE FUNCTION public.integration_reject_job()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfirmDemo(ctx, view.PaymentID); err == nil {
+	if err := repository.ConfirmDemo(ctx, paymentID); err == nil {
 		t.Fatal("enqueue failure committed payment")
 	}
 	var orderState, paymentState string
 	var receiptCount, crmCount int
 	if err := conn.QueryRow(ctx, `SELECT o.state,p.state,(SELECT count(*) FROM public.fiscal_receipts WHERE order_id=o.id),(SELECT count(*) FROM public.yclients_jobs WHERE order_id=o.id)
-		FROM public.payment_orders o JOIN public.payments p ON p.order_id=o.id WHERE p.id=$1`, view.PaymentID).Scan(&orderState, &paymentState, &receiptCount, &crmCount); err != nil {
+		FROM public.payment_orders o JOIN public.payments p ON p.order_id=o.id WHERE p.id=$1`, paymentID).Scan(&orderState, &paymentState, &receiptCount, &crmCount); err != nil {
 		t.Fatal(err)
 	}
 	if orderState != "payment_pending" || paymentState != "pending" || receiptCount != 0 || crmCount != 0 {
@@ -512,7 +549,7 @@ func TestCompletionIntegrationAtomicEnqueueAndMigrationRoundTrip(t *testing.T) {
 	if _, err := conn.Exec(ctx, `DROP TRIGGER integration_reject_job ON public.yclients_jobs; DROP FUNCTION public.integration_reject_job()`); err != nil {
 		t.Fatal(err)
 	}
-	if err := repository.ConfirmDemo(ctx, view.PaymentID); err != nil {
+	if err := repository.ConfirmDemo(ctx, paymentID); err != nil {
 		t.Fatal(err)
 	}
 	// Verify that the reversible migration is executable with real paid rows,
@@ -530,7 +567,7 @@ func TestCompletionIntegrationAtomicEnqueueAndMigrationRoundTrip(t *testing.T) {
 		t.Fatalf("paid migration backfill: count=%d error=%v", crmCount, err)
 	}
 	if err := conn.QueryRow(ctx, `SELECT o.state,p.state,(SELECT count(*) FROM public.fiscal_receipts WHERE order_id=o.id)
-		FROM public.payment_orders o JOIN public.payments p ON p.order_id=o.id WHERE p.id=$1`, view.PaymentID).Scan(&orderState, &paymentState, &receiptCount); err != nil || orderState != "paid" || paymentState != "paid" || receiptCount != 1 {
+		FROM public.payment_orders o JOIN public.payments p ON p.order_id=o.id WHERE p.id=$1`, paymentID).Scan(&orderState, &paymentState, &receiptCount); err != nil || orderState != "paid" || paymentState != "paid" || receiptCount != 1 {
 		t.Fatalf("migration roundtrip changed paid records or receipt identity: order=%s payment=%s receipts=%d error=%v", orderState, paymentState, receiptCount, err)
 	}
 }

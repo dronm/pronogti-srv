@@ -21,7 +21,8 @@ const orderColumns = `id::text, company_id, COALESCE(kiosk_id,0), entry_mode,
 	COALESCE(client_id,0), scope_hash, customer_session_hash,
 	COALESCE(visit_id,0), COALESCE(record_id,0), items_snapshot,
 	subtotal_kopecks, bonus_kopecks, payable_kopecks, currency, state,
-	idempotency_key, request_hash, expires_at, created_at, updated_at, yclients_sync_status,customer_contact`
+	idempotency_key, request_hash, expires_at, created_at, updated_at, yclients_sync_status,
+	customer_contact, customer_name`
 
 func (r *PostgresRepository) FindByKey(ctx context.Context, owner Owner, key string) (Order, error) {
 	return r.find(ctx, `SELECT `+orderColumns+` FROM public.payment_orders
@@ -44,9 +45,10 @@ func (r *PostgresRepository) Create(ctx context.Context, order Order) (Order, er
 	return r.find(ctx, `INSERT INTO public.payment_orders (
 		id,company_id,kiosk_id,entry_mode,client_id,scope_hash,customer_session_hash,
 		visit_id,record_id,items_snapshot,subtotal_kopecks,bonus_kopecks,payable_kopecks,
-		currency,state,idempotency_key,request_hash,expires_at,created_at,updated_at,yclients_sync_status,customer_contact
+		currency,state,idempotency_key,request_hash,expires_at,created_at,updated_at,yclients_sync_status,
+		customer_contact,customer_name
 	) VALUES (
-		$1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22
+		$1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23
 	) ON CONFLICT (company_id,customer_session_hash,idempotency_key)
 		DO UPDATE SET idempotency_key=payment_orders.idempotency_key
 	RETURNING `+orderColumns,
@@ -55,7 +57,8 @@ func (r *PostgresRepository) Create(ctx context.Context, order Order) (Order, er
 		nullableID(order.VisitID), nullableID(order.RecordID), string(items),
 		order.SubtotalKopecks, order.BonusKopecks, order.PayableKopecks,
 		order.Currency, order.State, order.IdempotencyKey, order.RequestHash,
-		order.ExpiresAt, order.CreatedAt, order.UpdatedAt, order.YClientsSyncStatus, order.CustomerContact)
+		order.ExpiresAt, order.CreatedAt, order.UpdatedAt, order.YClientsSyncStatus,
+		order.CustomerContact, order.CustomerName)
 }
 
 func (r *PostgresRepository) find(ctx context.Context, query string, args ...any) (Order, error) {
@@ -76,7 +79,7 @@ func (r *PostgresRepository) find(ctx context.Context, query string, args ...any
 		&item.VisitID, &item.RecordID, &snapshot, &item.SubtotalKopecks,
 		&item.BonusKopecks, &item.PayableKopecks, &item.Currency, &item.State,
 		&item.IdempotencyKey, &item.RequestHash, &item.ExpiresAt, &item.CreatedAt,
-		&item.UpdatedAt, &item.YClientsSyncStatus, &item.CustomerContact,
+		&item.UpdatedAt, &item.YClientsSyncStatus, &item.CustomerContact, &item.CustomerName,
 	)
 	if errors.Is(err, ds.ErrNoRows) {
 		return Order{}, ErrNotFound

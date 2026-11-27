@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -15,6 +16,7 @@ import (
 	"github.com/dronm/pronogti/internal/fiscal"
 	"github.com/dronm/pronogti/internal/services"
 	"github.com/dronm/webapp"
+	"github.com/dronm/webapp/constants"
 )
 
 var generatedAdminServiceRegistration = sync.OnceValue(func() (err error) {
@@ -156,6 +158,14 @@ func buildGeneratedAdminRoutes() ([]webapp.Route, error) {
 		}
 	}
 	return routes, nil
+}
+
+// AdminConstantAuthorizer revalidates the administrator at the service boundary.
+func AdminConstantAuthorizer(service AdminService) constants.Authorizer {
+	return func(ctx context.Context, _ constants.Operation, _ []int64) error {
+		_, err := administratorIdentity(service, (&http.Request{}).WithContext(ctx), false)
+		return err
+	}
 }
 
 func generatedAdminPermissionChecker(service AdminService, allowed map[string]struct{}) webapp.PermissionChecker {

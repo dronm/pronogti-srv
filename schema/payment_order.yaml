@@ -1,5 +1,49 @@
 name: PaymentOrder
 comment: Read-only administrator projection.
+enums:
+  - name: payment_order_state
+    goType: PaymentOrderState
+    sqlType: text
+    frontendName: PaymentOrderState
+    values:
+      - value: prepared
+        label: Подготовлен
+      - value: payment_pending
+        label: Ожидает оплаты
+      - value: paid
+        label: Оплачен
+      - value: cancelled
+        label: Отменён
+      - value: expired
+        label: Истёк
+  - name: payment_attempt_state
+    goType: PaymentAttemptState
+    sqlType: text
+    frontendName: PaymentAttemptState
+    values:
+      - value: creating
+        label: Создаётся
+      - value: pending
+        label: Ожидает оплаты
+      - value: paid
+        label: Оплачен
+      - value: failed
+        label: Ошибка
+      - value: expired
+        label: Истёк
+      - value: unknown
+        label: Требует проверки
+  - name: payment_method
+    goType: PaymentMethod
+    sqlType: text
+    frontendName: PaymentMethod
+    values:
+      - value: sbp
+        label: СБП (QR)
+      - value: card
+        label: Карта онлайн
+      - value: terminal_card
+        label: Терминал
 table:
   schema: public
   name: admin_payment_orders_list
@@ -26,6 +70,12 @@ fields:
   - name: kiosk_name
     type: text
     nullable: true
+  - name: client_name
+    type: text
+    nullable: true
+  - name: client_phone
+    type: text
+    nullable: true
   - name: entry_mode
     type: text
   - name: payable_kopecks
@@ -33,17 +83,20 @@ fields:
   - name: currency
     type: text
   - name: state
-    type: text
+    type: enum
+    enum: payment_order_state
   - name: created_at
     type: timestamptz
   - name: payment_id
     type: text
     nullable: true
   - name: payment_method
-    type: text
+    type: enum
+    enum: payment_method
     nullable: true
   - name: payment_state
-    type: text
+    type: enum
+    enum: payment_attempt_state
     nullable: true
   - name: environment
     type: text
@@ -84,17 +137,20 @@ detail:
     - name: currency
       type: text
     - name: state
-      type: text
+      type: enum
+      enum: payment_order_state
     - name: created_at
       type: timestamptz
     - name: payment_id
       type: text
       nullable: true
     - name: payment_method
-      type: text
+      type: enum
+      enum: payment_method
       nullable: true
     - name: payment_state
-      type: text
+      type: enum
+      enum: payment_attempt_state
       nullable: true
     - name: environment
       type: text
@@ -201,6 +257,17 @@ frontend:
       - field: kiosk_name
         label: Источник
         width: 10rem
+      - field: client_name
+        label: Клиент
+        width: 13rem
+        searchOperations:
+          - contains
+          - exact
+      - field: client_phone
+        label: Телефон
+        width: 11rem
+        searchOperations:
+          - exact
       - field: payable_kopecks
         label: К оплате
         width: 8rem
@@ -212,9 +279,8 @@ frontend:
           - exact
       - field: payment_state
         label: Оплата
-        width: 9rem
-        searchOperations:
-          - exact
+        width: 12rem
+        searchable: false
       - field: environment
         label: Среда
         width: 8rem

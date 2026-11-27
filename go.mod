@@ -55,4 +55,6 @@ replace github.com/dronm/paytochkabank => /home/andrey/go/payTochkaBank
 
 replace github.com/dronm/session => /home/andrey/go/session
 
+replace github.com/dronm/codegen => /home/andrey/go/codegen
+
 tool github.com/dronm/codegen/cmd/codegen

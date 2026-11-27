@@ -32,6 +32,35 @@ func RegisterGeneratedModelbindEnums() {
 			},
 		},
 		{
+			name: "payment_attempt_state",
+			values: []string{
+				"creating",
+				"pending",
+				"paid",
+				"failed",
+				"expired",
+				"unknown",
+			},
+		},
+		{
+			name: "payment_method",
+			values: []string{
+				"sbp",
+				"card",
+				"terminal_card",
+			},
+		},
+		{
+			name: "payment_order_state",
+			values: []string{
+				"prepared",
+				"payment_pending",
+				"paid",
+				"cancelled",
+				"expired",
+			},
+		},
+		{
 			name: "payment_profile_environment",
 			values: []string{
 				"mock",

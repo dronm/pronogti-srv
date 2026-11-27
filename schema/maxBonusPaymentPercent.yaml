@@ -1,0 +1,37 @@
+kind: constant
+name: MaxBonusPaymentPercent
+code: max_bonus_payment_percent
+title: Максимальный процент оплаты бонусами
+description: >-
+  Максимальная доля общей суммы чека в процентах,
+  которую можно оплатить бонусами.
+
+value:
+  type: int64
+  nullable: false
+  default: 100
+
+seed:
+  required: true
+  onConflict: doNothing
+
+backend:
+  enabled: true
+  typedAccessor: true
+  externalAuthorizer: true
+  routePrefix: /admin/constants
+
+sessionRequired: true
+permissions:
+  enabled: true
+  grantRoles:
+    - admin
+
+frontend:
+  scaffold: true
+  editor:
+    component: text
+
+migration:
+  enabled: true
+  permissions: false

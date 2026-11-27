@@ -94,6 +94,60 @@ func generatedIntegrationSalon(t *testing.T, fixture generatedAdministratorInteg
 	return salon
 }
 
+func TestGeneratedAdministratorIntegrationPaymentOrderFilters(t *testing.T) {
+	fixture := newGeneratedAdministratorIntegration(t)
+	_, err := fixture.conn.Exec(context.Background(), `
+		INSERT INTO public.payment_orders (id,company_id,entry_mode,scope_hash,customer_session_hash,
+			items_snapshot,subtotal_kopecks,payable_kopecks,state,idempotency_key,request_hash,expires_at,
+			customer_name,customer_contact)
+		SELECT ('10000000-0000-4000-8000-00000000000' || fixture.n)::uuid,781898,'public',repeat('a',64),
+			lpad(fixture.n::text,64,'b'),'[{}]'::jsonb,100,100,fixture.state,'order-' || fixture.n,
+			repeat('c',64),now()+interval '15 minutes',fixture.name,fixture.phone
+		FROM (VALUES (1,'paid','Анна Петрова','79000000001'), (2,'paid','Иван','79000000002'),
+			(3,'prepared','','+79000000003')) AS fixture(n,state,name,phone);
+		INSERT INTO public.payment_profiles
+			(company_id,name,environment,api_base_url,jwt_env,customer_code,sbp_merchant_id,account_id,enabled)
+		VALUES (781898,'Payment order filters','mock','https://bank.invalid','PRONOGTI_TEST_JWT',
+			'filter-customer','filter-merchant','40702810900000000001/044525104',true);
+		INSERT INTO public.payments (id,order_id,company_id,payment_profile_id,environment,amount_kopecks,
+			state,idempotency_key,request_hash,method,qrc_id,profile_snapshot)
+		SELECT o.id,o.id,o.company_id,p.id,'mock',o.payable_kopecks,'paid',o.idempotency_key,
+			repeat('c',64),CASE WHEN o.idempotency_key='order-1' THEN 'sbp' ELSE 'card' END,
+			CASE WHEN o.idempotency_key='order-1' THEN 'filter-test-qr' END,
+			to_jsonb(p) - 'jwt_env' - 'jwt_ciphertext'
+		FROM public.payment_orders o JOIN public.payment_profiles p ON p.company_id=o.company_id
+		WHERE o.state='paid' AND p.name='Payment order filters';`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, test := range []struct {
+		name, filters, idSuffix, phone string
+	}{
+		{"customer name", `[{"f":{"client_name":{"o":"ilk","v":"%Петрова%"}}}]`, "1", "79000000001"},
+		{"customer phone", `[{"f":{"client_phone":{"o":"e","v":"79000000002"}}}]`, "2", "79000000002"},
+		{"paid SBP order", `[{"f":{"state":{"o":"e","v":"paid"},"payment_state":{"o":"e","v":"paid"},"payment_method":{"o":"e","v":"sbp"}}}]`, "1", "79000000001"},
+		{"no payment attempt", `[{"f":{"payment_state":{"o":"i","v":null}}}]`, "3", "79000000003"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			query := url.QueryEscape(`{"count":30,"filter":` + test.filters + `}`)
+			response := adminRequest(fixture.handler, http.MethodGet, "/admin/payment-orders?params="+query, "", fixture.cookie, "")
+			var result struct {
+				Rows []models.PaymentOrder `json:"rows"`
+			}
+			if response.Code != http.StatusOK || json.Unmarshal(response.Body.Bytes(), &result) != nil || len(result.Rows) != 1 {
+				t.Fatalf("payment order collection: %d %s", response.Code, response.Body)
+			}
+			row := result.Rows[0]
+			if !strings.HasSuffix(row.ID, test.idSuffix) || row.ClientPhone == nil || *row.ClientPhone != test.phone {
+				t.Fatalf("wrong payment order: %+v", row)
+			}
+			if test.idSuffix == "3" && (row.ClientName != nil || row.PaymentState != nil || row.PaymentMethod != nil) {
+				t.Fatalf("missing legacy values should be null: %+v", row)
+			}
+		})
+	}
+}
+
 func TestGeneratedAdministratorFiscalReceiptDetails(t *testing.T) {
 	fixture := newGeneratedAdministratorIntegration(t)
 	const create = `{"company_id":781898,"name":"Receipt details","enabled":true,"mode":"demo",

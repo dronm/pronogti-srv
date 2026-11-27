@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"regexp"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/dronm/webapp"
@@ -152,7 +153,8 @@ func (s *Service) Prepare(ctx context.Context, actor Actor, key string, request 
 		Items: items, SubtotalKopecks: subtotal, PayableKopecks: subtotal,
 		Currency: "RUB", State: StatePrepared, IdempotencyKey: key, RequestHash: requestHash,
 		ExpiresAt: now.Add(time.Duration(s.options.MaxLifeTime) * time.Second),
-		CreatedAt: now, UpdatedAt: now, YClientsSyncStatus: "not_started", CustomerContact: actor.Contact,
+		CreatedAt: now, UpdatedAt: now, YClientsSyncStatus: "not_started",
+		CustomerName: strings.TrimSpace(actor.CustomerName), CustomerContact: actor.Contact,
 	}
 	stored, err := s.repository.Create(ctx, order)
 	if err != nil {

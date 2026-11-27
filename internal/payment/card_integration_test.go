@@ -595,7 +595,7 @@ func TestCardIntegrationClaimFencingAndDuplicateConfirmation(t *testing.T) {
 func TestCardIntegrationMigrationRoundtripAndPaidIdentityProtection(t *testing.T) {
 	// Exercise migration 9 without later administrative views that legitimately
 	// reference its columns; production rollback must retain those dependencies.
-	provider, conn := completionTestDatabaseThrough(t, 9)
+	_, conn := completionTestDatabaseThrough(t, 9)
 	ctx := context.Background()
 	for _, direction := range []string{"down", "up"} {
 		body, err := os.ReadFile(filepath.Join("..", "..", "migrations", "000009_card_checkout."+direction+".sql"))
@@ -606,13 +606,9 @@ func TestCardIntegrationMigrationRoundtripAndPaidIdentityProtection(t *testing.T
 			t.Fatalf("migration9 %s: %v", direction, err)
 		}
 	}
-	cardIntegrationProfile(t, conn, "http://127.0.0.1:8099")
+	profileID := cardIntegrationProfile(t, conn, "http://127.0.0.1:8099")
 	actor := cardIntegrationActor()
-	order := completionOrder(t, provider, actor, "card-migration-checkout")
-	view, err := NewService(Dependencies{Repository: NewPostgresRepository(provider), CardBank: SDKCardBank{}}, Options{}).InitCard(ctx, actor, "card:"+order.ID, order.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
+	_, paymentID := seedMigration9Attempt(t, conn, actor, profileID, "card-migration-checkout", "card")
 	body, err := os.ReadFile(filepath.Join("..", "..", "migrations", "000009_card_checkout.down.sql"))
 	if err != nil {
 		t.Fatal(err)
@@ -624,7 +620,7 @@ func TestCardIntegrationMigrationRoundtripAndPaidIdentityProtection(t *testing.T
 		t.Fatal(err)
 	}
 	var method, operationID string
-	if err := conn.QueryRow(ctx, `SELECT method,acquiring_operation_id FROM public.payments WHERE id=$1`, view.PaymentID).Scan(&method, &operationID); err != nil || method != "card" || operationID == "" {
+	if err := conn.QueryRow(ctx, `SELECT method,acquiring_operation_id FROM public.payments WHERE id=$1`, paymentID).Scan(&method, &operationID); err != nil || method != "card" || operationID == "" {
 		t.Fatalf("protected card identity: %q %q %v", method, operationID, err)
 	}
 }
