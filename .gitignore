@@ -1,4 +1,5 @@
 *.zip
+*.patch
 .env
 config.json
 prompt
